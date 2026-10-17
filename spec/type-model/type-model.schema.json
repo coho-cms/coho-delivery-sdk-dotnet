@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coho type model",
+  "description": "A language-neutral description of one ref's content types, read by code generators. Readers must ignore keys they do not know and refuse an irVersion whose major they do not support, so no object here closes its properties.",
+  "type": "object",
+  "required": ["irVersion", "source", "types"],
+  "properties": {
+    "irVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "major.minor. A minor bump only adds optional keys or field kinds."
+    },
+    "source": {
+      "type": "object",
+      "required": ["project", "ref", "immutable", "schemaHash"],
+      "properties": {
+        "project": { "type": "string", "format": "uuid" },
+        "ref": { "type": "string", "minLength": 1, "description": "The branch or tag the types were read from." },
+        "immutable": { "type": "boolean", "description": "True for a tag. A branch's types can change after this file was produced." },
+        "schemaHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of `types` serialized compactly in the order produced. Equal hashes mean equal types, whichever ref they came from."
+        }
+      }
+    },
+    "types": {
+      "type": "object",
+      "description": "Content types keyed by slug, in sorted order.",
+      "additionalProperties": { "$ref": "#/$defs/type" }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Things a generator should print. Absent when there are none.",
+      "items": { "$ref": "#/$defs/warning" }
+    }
+  },
+  "$defs": {
+    "type": {
+      "type": "object",
+      "required": ["slug", "name", "version", "fields"],
+      "properties": {
+        "slug": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1, "description": "The editors' display name; the slug when there is none." },
+        "version": { "type": "string", "format": "uuid", "description": "The type version this ref pins." },
+        "fields": {
+          "type": "array",
+          "description": "In declaration order. Fields hidden from the API are not listed.",
+          "items": { "$ref": "#/$defs/field" }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "name", "kind", "presence", "required", "localized", "sortable"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9]*$", "description": "The key in an entry's fields. Never changes." },
+        "name": { "type": "string", "minLength": 1, "description": "The editors' label; the id when there is none." },
+        "kind": {
+          "type": "string",
+          "description": "text, longText, number, integer, boolean, datetime, json, repeater, reference, choice or multichoice. A kind a generator does not know is emitted as untyped, with a warning."
+        },
+        "presence": {
+          "enum": ["always", "maybe"],
+          "description": "Whether delivery can leave the field out of an entry. Generators decide optionality from this alone."
+        },
+        "required": { "type": "boolean", "description": "Enforced when an entry is written." },
+        "localized": { "type": "boolean", "description": "Delivered as one locale's value, and absent where that locale has no translation." },
+        "sortable": { "type": "boolean", "description": "Accepted by delivery's `order` on a list of this type." },
+        "many": { "type": "boolean", "description": "On references: an array of links rather than one." },
+        "of": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "On references: the slugs of the types a link may point at, each a key of `types`. Empty when no target type is on this ref. On repeaters: the component types an item may be, sorted."
+        },
+        "values": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "On choice and multichoice: the permitted values, sorted. Content may hold a value added after this file was produced, so generated code must accept unknown values."
+        },
+        "textFormat": {
+          "type": "string",
+          "description": "On longText: plain, markdown or html."
+        },
+        "min": { "type": "integer", "description": "Length for text, the value for numbers, the count for arrays." },
+        "max": { "type": "integer", "description": "Length for text, the value for numbers, the count for arrays." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "reference" } } },
+          "then": { "required": ["many", "of"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "repeater" } } },
+          "then": { "required": ["of"] }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["choice", "multichoice"] } } },
+          "then": { "required": ["values"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "longText" } } },
+          "then": { "required": ["textFormat"] }
+        }
+      ]
+    },
+    "warning": {
+      "type": "object",
+      "required": ["type", "field", "message"],
+      "properties": {
+        "type": { "type": "string" },
+        "field": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

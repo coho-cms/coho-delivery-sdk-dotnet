@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CohoCms.Delivery/CohoCms.Delivery.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/CohoCms.Delivery.Tests/CohoCms.Delivery.Tests.csproj" />
+  </Folder>
+</Solution>
