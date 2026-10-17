@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The library template, for `dotnet new coho-library`. Its content is bundled from a tag of
+    coho-template-dotnet by scripts/bundle-template.cs, which pins it to this SDK's version,
+    so a version of CohoCms.Templates always creates the same library.
+    Without a bundled template there is nothing to pack, and this project packs nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>CohoCms.Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <Description>dotnet new coho-library: creates your Coho CMS content library, a .NET library generated from your project's content types.</Description>
+    <PackageTags>$(PackageTags);template;dotnet-new</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <!-- The template's own .cs files are its content, never this project's code. -->
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- Dotfiles are part of the template: .gitignore keeps a library's .env out of git. -->
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <IsPackable Condition="!Exists('content/coho-library/.template.config/template.json')">false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="content/**/*" Exclude="content/**/bin/**;content/**/obj/**" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

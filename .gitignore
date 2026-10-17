@@ -55,3 +55,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# The template bundled into CohoCms.Templates, by scripts/bundle-template.cs.
+src/CohoCms.Templates/content/

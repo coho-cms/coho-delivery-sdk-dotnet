@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/CohoCms.Codegen/CohoCms.Codegen.csproj" />
     <Project Path="src/CohoCms.Delivery/CohoCms.Delivery.csproj" />
+    <Project Path="src/CohoCms.Templates/CohoCms.Templates.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/CohoCms.Codegen.Tests/CohoCms.Codegen.Tests.csproj" />

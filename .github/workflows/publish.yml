@@ -1,0 +1,64 @@
+name: Publish
+
+# Publishes CohoCms.Delivery, CohoCms.Codegen and CohoCms.Templates to nuget.org, together
+# and at one version: the template pins the libraries it creates to that version, and is
+# bundled from the coho-template-dotnet ref named here. Bump the version in
+# Directory.Build.props, merge, tag the template, then run this by hand. A version cannot be
+# published twice, so every fix is a new version.
+#
+# Trusted Publishing: nuget.org trusts this workflow file in this repository, by a policy
+# the CohoCMS organisation holds, and gives it a key for an hour. No key is stored here.
+# NUGET_USER is the nuget.org user the policy was created by.
+on:
+  workflow_dispatch:
+    inputs:
+      template-ref:
+        description: The coho-template-dotnet tag or branch to bundle into CohoCms.Templates
+        required: true
+
+permissions:
+  contents: read
+  # For the token nuget.org exchanges for a short-lived key.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check out the template to bundle
+        uses: actions/checkout@v5
+        with:
+          repository: coho-cms/coho-template-dotnet
+          ref: ${{ inputs.template-ref }}
+          path: template-checkout
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - name: Test
+        run: dotnet test --no-build -c Release
+        env:
+          DOTNET_ROLL_FORWARD: LatestPatch
+      - name: Bundle the template into CohoCms.Templates
+        run: dotnet run scripts/bundle-template.cs -- "$GITHUB_WORKSPACE/template-checkout"
+      - run: dotnet pack -c Release -o artifacts
+      # CohoCms.Templates packs nothing without a bundled template, so its absence would not fail the pack.
+      - name: Every package is there
+        run: |
+          for package in CohoCms.Delivery CohoCms.Codegen CohoCms.Templates; do
+            ls artifacts/"$package".*.nupkg
+          done
+      - name: Sign in to nuget.org
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      # Symbol packages beside them go up with them.
+      - name: Publish
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "$KEY" --source https://api.nuget.org/v3/index.json
+        env:
+          KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
