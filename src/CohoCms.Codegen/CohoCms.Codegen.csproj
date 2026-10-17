@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CohoCms.Codegen</RootNamespace>
+    <AssemblyName>coho-codegen</AssemblyName>
+    <PackageId>CohoCms.Codegen</PackageId>
+    <Description>Generates a typed content library from your Coho CMS content types.</Description>
+    <PackageTags>$(PackageTags);codegen</PackageTags>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>coho-codegen</ToolCommandName>
+    <!-- A tool runs on whatever runtime the machine has, from 10 on. -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CohoCms.Codegen.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

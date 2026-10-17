@@ -25,6 +25,25 @@ public static class CohoServiceCollectionExtensions
         return services.AddHttpClient(HttpClientName);
     }
 
+    /// <summary>
+    /// A typed client, one for the app, over a <see cref="ContentClient"/> of its own: what a
+    /// generated library's <c>AddCoho</c> calls. Each library's client has its own shape and
+    /// cache, so two libraries, or a library and untyped reads, can share an app.
+    /// </summary>
+    /// <returns>The builder of the client's <see cref="HttpClient"/>, to add handlers to.</returns>
+    public static IHttpClientBuilder AddCohoContent<TClient>(
+        this IServiceCollection services,
+        IReadOnlyDictionary<string, TypeShape> shape,
+        Func<ContentClient, TClient> wrap,
+        Func<IServiceProvider, ContentConfig>? config = null)
+        where TClient : class
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(wrap);
+        services.AddSingleton(provider => wrap(new ContentClient(ConfigOf(provider, config), shape, OptionsOf(provider))));
+        return services.AddHttpClient(HttpClientName);
+    }
+
     /// <summary>A <see cref="DeliveryClient"/>, one for the app.</summary>
     /// <returns>The builder of the client's <see cref="HttpClient"/>, to add handlers to.</returns>
     public static IHttpClientBuilder AddCohoDelivery(this IServiceCollection services, Func<IServiceProvider, DeliveryConfig>? config = null)

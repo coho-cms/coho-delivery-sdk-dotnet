@@ -24,6 +24,8 @@ csharp_new_line_before_finally = true
 csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_before_members_in_anonymous_types = true
 csharp_prefer_braces = when_multiline:warning
+# A case's block lines up with its case, as any other block lines up with its statement.
+csharp_indent_case_contents_when_block = false
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_style_var_for_built_in_types = true:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
