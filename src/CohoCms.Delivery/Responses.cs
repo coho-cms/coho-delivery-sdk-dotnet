@@ -27,22 +27,46 @@ public sealed record Entry
     /// The author's fields. A localized field with no value in the requested locale is
     /// absent, not null. A reference holds an entry id, or an array of them.
     /// </summary>
-    public ImmutableDictionary<string, JsonElement> Fields { get; init; } = ImmutableDictionary<string, JsonElement>.Empty;
+    public ImmutableDictionary<string, JsonElement> Fields
+    {
+        get => _fields;
+        init => _fields = value ?? ImmutableDictionary<string, JsonElement>.Empty;
+    }
+
+    // Each default is kept in its setter as well: deserialization sets a key it does not find
+    // to null, past an initializer.
+    private readonly ImmutableDictionary<string, JsonElement> _fields = ImmutableDictionary<string, JsonElement>.Empty;
 }
 
 /// <summary>What every read returns: the roots, everything reached from them, and what was not.</summary>
 public record EntryGraph
 {
+    private readonly ImmutableArray<string> _roots = [];
+    private readonly ImmutableDictionary<string, Entry> _entries = ImmutableDictionary<string, Entry>.Empty;
+    private readonly ImmutableDictionary<string, string> _unresolved = ImmutableDictionary<string, string>.Empty;
+
     /// <summary>The entries asked for that exist, in the order the read defines.</summary>
-    public ImmutableArray<string> Roots { get; init; } = [];
+    public ImmutableArray<string> Roots
+    {
+        get => _roots;
+        init => _roots = value.IsDefault ? [] : value;
+    }
 
     /// <summary>The roots and every entry reached from them, keyed by id.</summary>
-    public ImmutableDictionary<string, Entry> Entries { get; init; } = ImmutableDictionary<string, Entry>.Empty;
+    public ImmutableDictionary<string, Entry> Entries
+    {
+        get => _entries;
+        init => _entries = value ?? ImmutableDictionary<string, Entry>.Empty;
+    }
 
     /// <summary>
     /// Why a referenced entry is not in <see cref="Entries"/>, by id: see <see cref="UnresolvedReason"/>.
     /// </summary>
-    public ImmutableDictionary<string, string> Unresolved { get; init; } = ImmutableDictionary<string, string>.Empty;
+    public ImmutableDictionary<string, string> Unresolved
+    {
+        get => _unresolved;
+        init => _unresolved = value ?? ImmutableDictionary<string, string>.Empty;
+    }
 
     internal static readonly EntryGraph Nothing = new();
 }

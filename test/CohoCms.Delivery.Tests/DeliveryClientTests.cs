@@ -301,3 +301,17 @@ public sealed class DeliveryClientTests
         Assert.NotNull(cache.Get("c"));
     }
 }
+
+public sealed class ResponseShapeTests
+{
+    [Fact]
+    public void A_response_without_its_optional_keys_reads_as_empty()
+    {
+        var graph = System.Text.Json.JsonSerializer.Deserialize("""{ "roots": ["a"], "entries": { "a": { "id": "a", "slug": "a", "type": "t" } } }""", DeliveryJson.Default.EntryList)!;
+
+        Assert.NotNull(graph.Unresolved);
+        Assert.Empty(graph.Unresolved);
+        Assert.NotNull(graph.Entries["a"].Fields);
+        Assert.Empty(graph.Entries["a"].Fields);
+    }
+}
