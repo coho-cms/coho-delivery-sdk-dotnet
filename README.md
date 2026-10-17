@@ -41,7 +41,7 @@ To try the template from a checkout before publishing, bundle it, pack, and inst
 ```bash
 dotnet run scripts/bundle-template.cs -- ../coho-template-dotnet
 dotnet pack -c Release -o artifacts
-dotnet new install artifacts/CohoCms.Templates.0.1.0-alpha.1.nupkg --debug:custom-hive /tmp/coho-hive
+dotnet new install artifacts/CohoCms.Templates.0.1.0-alpha.2.nupkg --debug:custom-hive /tmp/coho-hive
 dotnet new coho-library -n Acme.Content --debug:custom-hive /tmp/coho-hive
 ```
 
