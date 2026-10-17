@@ -20,5 +20,15 @@
     <!-- The delivery tests' replay of the recordings, which the generated client reads through. -->
     <Compile Include="../CohoCms.Delivery.Tests/Support.cs" Link="Support.cs" />
     <None Include="../../spec/**/*.json" LinkBase="spec" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Compiled, and copied beside the tests for comparing: a CI build maps source paths away. -->
+    <None Include="Expected/**/*.cs" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Where a golden update writes, which only a local run does. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ProjectDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildProjectDirectory)</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -17,8 +17,18 @@ internal static class Fixtures
 
     public static TypeModel Model(string name) => TypeModels.Read(File.ReadAllText(ModelFile(name)), name);
 
-    /// <summary>Where a fixture's expected files are in the source tree, so a golden update writes there.</summary>
-    public static string Expected(string name, [CallerFilePath] string here = "") => Path.Combine(Path.GetDirectoryName(here)!, "Expected", name);
+    /// <summary>A fixture's expected files, as copied beside the tests.</summary>
+    public static string Expected(string name) => Path.Combine(AppContext.BaseDirectory, "Expected", name);
+
+    /// <summary>
+    /// A fixture's expected files in the source tree, where a golden update writes. Not the
+    /// compiler's path for this file: a CI build maps source paths to <c>/_/</c>.
+    /// </summary>
+    public static string ExpectedSource(string name)
+    {
+        var project = typeof(Fixtures).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Single(each => each.Key == "ProjectDirectory").Value!;
+        return Path.Combine(project, "Expected", name);
+    }
 
     public static string Temp()
     {

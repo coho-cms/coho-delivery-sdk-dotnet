@@ -17,14 +17,12 @@ public sealed class GeneratorTests
     public void A_fixture_generates_its_expected_files_byte_for_byte(string name)
     {
         var generated = Generator.Generate(Model(name), Namespaces[name]);
-        var expected = Expected(name);
-
         if (Environment.GetEnvironmentVariable("COHO_UPDATE_GOLDEN") == "1")
         {
-            Files.Write(generated.Files, expected);
+            Files.Write(generated.Files, ExpectedSource(name));
             return;
         }
-        Assert.Empty(Files.Drift(generated.Files, expected));
+        Assert.Empty(Files.Drift(generated.Files, Expected(name)));
         Assert.Empty(generated.Warnings);
     }
 
