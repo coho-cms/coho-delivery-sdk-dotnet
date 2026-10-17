@@ -27,6 +27,6 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release
         env:
-          # Each build on its own runtime, not rolled forward to the newest.
-          DOTNET_ROLL_FORWARD: Disable
+          # Each build on its own major version's newest patch, not rolled forward to 10.
+          DOTNET_ROLL_FORWARD: LatestPatch
       - run: dotnet pack --no-build -c Release -o artifacts
