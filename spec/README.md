@@ -5,4 +5,4 @@ A copy of [coho-sdk-spec](https://github.com/coho-cms/coho-sdk-spec), the materi
 - `delivery/recordings/`: what the delivery API answered to a fixed set of requests. The runtime's tests replay them.
 - `type-model/`: the type model's JSON Schema and fixtures. The generator's tests read them.
 
-Copied 2026-10-17 from coho-delivery-sdk-typescript's copy of 2026-10-13, before coho-sdk-spec's first tag. From then on, copy a tagged release and name it here.
+Copied from coho-sdk-spec **v2026.1.0a2** (2026-10-18): the type model at 1.1, with asset fields and the `assets` fixture. Copy a tagged release and name it here.

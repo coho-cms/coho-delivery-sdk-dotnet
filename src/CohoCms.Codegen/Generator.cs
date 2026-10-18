@@ -335,6 +335,13 @@ internal static class Generator
                     ? new Shape($"IReadOnlyList<Linked<{target}>>", $"entry.Links<{target}>({id}) ?? []", " = [];", List: true)
                     : new Shape($"Linked<{target}>?", $"entry.Link<{target}>({id})");
             }
+            case "asset":
+                // Embedded by delivery, never a link to follow. One that is gone on the ref
+                // is null, required or not, so a single asset is always nullable; in a list a
+                // gone asset is left out (coho-sdk-spec, "Asset fields").
+                return field.Many
+                    ? new Shape("IReadOnlyList<Asset>", $"entry.Assets({id}) ?? []", " = [];", List: true)
+                    : new Shape("Asset?", $"entry.Asset({id})");
             case "repeater":
                 return new Shape("IReadOnlyList<RepeaterItem>", $"entry.Repeater({id}) ?? []", " = [];", List: true);
             default:
@@ -353,6 +360,14 @@ internal static class Generator
         if (field.Kind == "longText" && field.TextFormat == "html")
         {
             notes.Add("HTML.");
+        }
+        if (field.Kind == "asset" && field.Accept.Count > 0)
+        {
+            notes.Add($"Accepts {string.Join(", ", field.Accept)}.");
+        }
+        if (field.Kind == "asset" && !field.Many)
+        {
+            notes.Add("Null where the asset it linked is gone.");
         }
         if (field.Localized)
         {

@@ -11,6 +11,7 @@ internal static class Fixtures
     {
         ["cli-next-blog"] = "Golden.CliNextBlog",
         ["delivery-fixture"] = "Golden.DeliveryFixture",
+        ["assets"] = "Golden.Assets",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");

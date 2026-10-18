@@ -223,6 +223,16 @@ public sealed class EntryReader
         return links;
     }
 
+    /// <summary>
+    /// An asset field of one asset, as delivery embeds it (doc 40 §14.6). Null when the field
+    /// is absent, and when the asset it linked is gone on this ref.
+    /// </summary>
+    public Asset? Asset(string field) => Value(field, "an asset", JsonValueKind.Object, CohoCms.Delivery.Asset.From);
+
+    /// <summary>An asset field of several assets. A gone asset is left out of the list, never null in it.</summary>
+    public IReadOnlyList<Asset>? Assets(string field) =>
+        Array(field, "assets", JsonValueKind.Object, value => CohoCms.Delivery.Asset.From(value)!);
+
     public IReadOnlyList<RepeaterItem>? Repeater(string field)
     {
         return Array(field, "repeater items", JsonValueKind.Object, value =>

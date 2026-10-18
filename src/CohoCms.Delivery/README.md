@@ -80,6 +80,23 @@ The names are the same in every Coho SDK. Setting a preview token and a delivery
 
 `AddCohoContent` returns the `IHttpClientBuilder` of the client's `HttpClient`, so you can add resilience handlers to it.
 
+## Assets
+
+An asset field is read as an `Asset`: its `File` (media type, size, and for images width and height), `Alt`, `FocalPoint`, and the URLs the asset CDN serves it at. They build resized URLs with no request and no secret:
+
+```csharp
+post.Hero?.Image(new ImageOptions { Width = 800, Format = ImageFormat.Auto });       // resized at the edge
+post.Hero?.Image(new ImageOptions { Width = 400, Height = 400, Fit = ImageFit.Fill }); // cropped around its focal point
+post.Hero?.Srcset();                                                                   // 640w … up to the original
+post.Hero?.Srcset(new ImageOptions { Width = 300 }, densities: [1, 2]);                // 1x, 2x
+```
+
+- **Only raster images resize** (`IsImage`). An SVG, a PDF or any other file has only its original, which `Image` and `Srcset` return whatever the options.
+- **The edge snaps widths up** to `Asset.ImageWidths`, so a `Srcset` built from them lands on cached images.
+- **An asset is as public as its URL**, drafts included, and deleting it does not stop the URL working.
+
+Delivery does not serve asset fields yet (coho-data doc 40 §14.6); the shape is the one it will embed.
+
 ## Caching
 
 Each client keeps a private cache of responses, following `Cache-Control` and `ETag`. A tag named directly is fetched once. An environment is reused for its short `max-age`, then revalidated, which costs a `304` when nothing was promoted. A preview is fetched every time. Set `ClientOptions.MaxCachedResponses` to 0 to turn it off.

@@ -72,6 +72,9 @@ internal sealed record Field
 
     public List<string> Values { get; set; } = [];
 
+    /// <summary>On assets (IR 1.1): the media types a linked file may be, or family wildcards. Empty for any.</summary>
+    public List<string> Accept { get; set; } = [];
+
     public string? TextFormat { get; set; }
 
     public bool Always => Presence == "always";

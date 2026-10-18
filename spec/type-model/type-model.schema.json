@@ -58,7 +58,7 @@
         "name": { "type": "string", "minLength": 1, "description": "The editors' label; the id when there is none." },
         "kind": {
           "type": "string",
-          "description": "text, longText, number, integer, boolean, datetime, json, repeater, reference, choice or multichoice. A kind a generator does not know is emitted as untyped, with a warning."
+          "description": "text, longText, number, integer, boolean, datetime, json, repeater, reference, asset (since 1.1), choice or multichoice. A kind a generator does not know is emitted as untyped, with a warning."
         },
         "presence": {
           "enum": ["always", "maybe"],
@@ -67,7 +67,12 @@
         "required": { "type": "boolean", "description": "Enforced when an entry is written." },
         "localized": { "type": "boolean", "description": "Delivered as one locale's value, and absent where that locale has no translation." },
         "sortable": { "type": "boolean", "description": "Accepted by delivery's `order` on a list of this type." },
-        "many": { "type": "boolean", "description": "On references: an array of links rather than one." },
+        "many": { "type": "boolean", "description": "On references and assets: an array of links rather than one." },
+        "accept": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "On assets (since 1.1): the media types a linked file may be, or family wildcards such as image/*, sorted. Empty means any file Coho stores."
+        },
         "of": {
           "type": "array",
           "items": { "type": "string" },
@@ -89,6 +94,10 @@
         {
           "if": { "properties": { "kind": { "const": "reference" } } },
           "then": { "required": ["many", "of"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "asset" } } },
+          "then": { "required": ["many", "accept"] }
         },
         {
           "if": { "properties": { "kind": { "const": "repeater" } } },
