@@ -68,7 +68,26 @@ public record EntryGraph
         init => _unresolved = value ?? ImmutableDictionary<string, string>.Empty;
     }
 
+    /// <summary>
+    /// What the response could not give in full (delivery 2.1.0): an asset field whose asset
+    /// is gone, which is then null, or left out of a list. Null when there is nothing to say.
+    /// </summary>
+    public IReadOnlyList<DeliveryWarning>? Warnings { get; init; }
+
     internal static readonly EntryGraph Nothing = new();
+}
+
+/// <summary>One warning. <see cref="Code"/> says what, the rest says where. Show an unknown code; never fail on one.</summary>
+public sealed record DeliveryWarning
+{
+    /// <summary><c>ASSET_MISSING</c>, or a code added since.</summary>
+    public required string Code { get; init; }
+
+    public required string Entry { get; init; }
+
+    public required string Field { get; init; }
+
+    public required string Asset { get; init; }
 }
 
 /// <summary>A page of a list.</summary>
