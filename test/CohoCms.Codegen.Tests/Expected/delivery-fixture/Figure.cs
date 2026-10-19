@@ -28,6 +28,7 @@ public sealed record Figure : EntryBase
         Image = entry.Asset("image");
         Poster = entry.Asset("poster");
         Gallery = entry.Assets("gallery") ?? [];
+        Sources = entry.Items<Citation>("sources", static each => each.Type switch { "citation" => new Citation(each), _ => null }) ?? [];
     }
 
     /// <summary>caption</summary>
@@ -41,4 +42,7 @@ public sealed record Figure : EntryBase
 
     /// <summary>gallery</summary>
     public IReadOnlyList<Asset> Gallery { get; init; } = [];
+
+    /// <summary>sources</summary>
+    public IReadOnlyList<Citation> Sources { get; init; } = [];
 }

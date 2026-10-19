@@ -63,6 +63,17 @@ public sealed class IntegrationTests
     }
 
     [Fact]
+    public async Task Repeater_items_are_read_as_the_generated_component_records()
+    {
+        // The recording asked without a locale.
+        var figure = await Client(locale: null).Figure.ByIdAsync("00000000-0000-7000-8000-0000000000f2", cancellationToken: None);
+
+        Assert.Equal(["ASCE", "Rodegerdts, L., et al."], figure!.Sources.Select(citation => citation.Authors));
+        Assert.Equal(2010L, figure.Sources[1].Year);
+        Assert.IsType<Citation>(figure.Sources[0]);
+    }
+
+    [Fact]
     public void The_client_names_the_type_model_it_was_generated_from()
     {
         Assert.Equal("v0.0.1", Coho.Source.Ref);

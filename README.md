@@ -30,7 +30,7 @@ dotnet pack -c Release -o artifacts
 
 The three packages are published to nuget.org together, at one version, as alphas for now: `CohoCms.Templates` pins every library it creates to that version of `CohoCms.Delivery` and `CohoCms.Codegen`, and carries the library template inside it.
 
-1. Bump `<Version>` in `Directory.Build.props`, such as to `0.1.0-alpha.2`, and merge.
+1. Bump `<Version>` in `Directory.Build.props`, such as to `0.1.0-alpha.4`, and merge.
 2. Tag [coho-template-dotnet](https://github.com/coho-cms/coho-template-dotnet) at the commit to ship.
 3. Run the **Publish** workflow, naming that tag. It tests, bundles the template into `CohoCms.Templates`, and publishes all three.
 
@@ -41,7 +41,7 @@ To try the template from a checkout before publishing, bundle it, pack, and inst
 ```bash
 dotnet run scripts/bundle-template.cs -- ../coho-template-dotnet
 dotnet pack -c Release -o artifacts
-dotnet new install artifacts/CohoCms.Templates.0.1.0-alpha.2.nupkg --debug:custom-hive /tmp/coho-hive
+dotnet new install artifacts/CohoCms.Templates.0.1.0-alpha.3.nupkg --debug:custom-hive /tmp/coho-hive
 dotnet new coho-library -n Acme.Content --debug:custom-hive /tmp/coho-hive
 ```
 

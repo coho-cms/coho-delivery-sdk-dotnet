@@ -43,7 +43,7 @@ if (post?.Author is { IsResolved: true } author)
 ```
 
 - **Entries are records** deriving from `EntryBase`, with the system values `Id`, `Type`, `Slug` and `Locale` beside their fields. An entry of a type nobody declared is a `HydratedEntry`, holding its fields as JSON.
-- **A reference is a `Linked<T>`**: its target, or a stub whose `Unresolved` says why it is not there. `depth` when it is beyond the requested depth, `absent` when it is not on the ref, `cycle` where following it would loop back, and `type` where the target is of a type the field does not link to.
+- **A reference is a `Linked<T>`**: its target, or a stub whose `Unresolved` says why it is not there. `depth` when it is beyond the requested depth, `absent` when it is not on the ref, `cycle` where following it would loop back, and `type` where the target is of a type the field does not link to. `post.Tags.Resolved()` gives the entries of a list of links that are here, leaving out the stubs.
 - **Problems are reported, not thrown.** An entry missing a field its type always has, which happens to older entries after a field becomes required, or holding a value of the wrong kind, is passed to `ClientOptions.OnIssue`, once per entry and field. The default is a warning on the client's logger.
 
 ## Released and unreleased content
@@ -89,13 +89,15 @@ post.Hero?.Image(new ImageOptions { Width = 800, Format = ImageFormat.Auto });  
 post.Hero?.Image(new ImageOptions { Width = 400, Height = 400, Fit = ImageFit.Fill }); // cropped around its focal point
 post.Hero?.Srcset();                                                                   // 640w … up to the original
 post.Hero?.Srcset(new ImageOptions { Width = 300 }, densities: [1, 2]);                // 1x, 2x
+post.Brochure?.Download();                                                             // any file, as an attachment
 ```
 
 - **Only raster images resize** (`IsImage`). An SVG, a PDF or any other file has only its original, which `Image` and `Srcset` return whatever the options.
 - **The edge snaps widths up** to `Asset.ImageWidths`, so a `Srcset` built from them lands on cached images.
+- **`Download` asks the edge to send the file as an attachment**, under its own name, where `Url` opens it in the browser. ⚠️ The edge does not do so yet: until it does, the download URL opens the file too, and needs no change when it starts to.
 - **An asset is as public as its URL**, drafts included, and deleting it does not stop the URL working.
 
-Delivery does not serve asset fields yet (coho-data doc 40 §14.6); the shape is the one it will embed.
+For an `<img>` and a download link already built from these, see [`CohoCms.Razor`](https://github.com/coho-cms/coho-razor).
 
 ## Caching
 

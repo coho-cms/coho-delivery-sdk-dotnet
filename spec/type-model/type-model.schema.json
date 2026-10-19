@@ -20,13 +20,18 @@
         "schemaHash": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$",
-          "description": "SHA-256 of `types` serialized compactly in the order produced. Equal hashes mean equal types, whichever ref they came from."
+          "description": "SHA-256 of `types` serialized compactly in the order produced, or of `{\"types\": …, \"components\": …}` when `components` is not empty (since 1.2). Equal hashes mean equal types, whichever ref they came from."
         }
       }
     },
     "types": {
       "type": "object",
       "description": "Content types keyed by slug, in sorted order.",
+      "additionalProperties": { "$ref": "#/$defs/type" }
+    },
+    "components": {
+      "type": "object",
+      "description": "Since 1.2: component types keyed by slug, in sorted order, the types a repeater's items may be. The same shape as `types`, and never sortable. A component's slug is never also a content type's. Absent before 1.2, which a reader takes as empty.",
       "additionalProperties": { "$ref": "#/$defs/type" }
     },
     "warnings": {
@@ -76,7 +81,7 @@
         "of": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "On references: the slugs of the types a link may point at, each a key of `types`. Empty when no target type is on this ref. On repeaters: the component types an item may be, sorted."
+          "description": "On references: the slugs of the types a link may point at, each a key of `types`. Empty when no target type is on this ref. On repeaters: the component types an item may be, sorted; since 1.2 each is a key of `components`, and it is empty when none is on this ref. An item names its component in `_type`."
         },
         "values": {
           "type": "array",

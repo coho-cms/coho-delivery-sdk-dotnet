@@ -116,30 +116,31 @@ public static class Hydrator
 }
 
 /// <summary>
-/// One entry's values, read for the record a <see cref="TypeShape.Read"/> builds. A value of
-/// the wrong kind is reported and read as null, so content the code did not expect never
-/// stops a page rendering.
+/// Values read from one map of fields, for the record a generated constructor builds: an
+/// entry's (<see cref="EntryReader"/>) or a repeater item's (<see cref="ItemReader"/>). A
+/// value of the wrong kind is reported and read as null, so content the code did not expect
+/// never stops a page rendering.
 /// </summary>
-public sealed class EntryReader
+public abstract class FieldReader
 {
     private readonly Entry _entry;
     private readonly Hydrator.Pass _pass;
+    private readonly string _path;
 
-    internal EntryReader(Entry entry, Hydrator.Pass pass)
+    /// <param name="entry">The entry the fields are in, which an issue is about.</param>
+    /// <param name="pass">The tree being built, which follows links.</param>
+    /// <param name="fields">The fields to read.</param>
+    /// <param name="path">Where they are in the entry, such as <c>citations/0/</c> for an item: what an issue names.</param>
+    private protected FieldReader(Entry entry, Hydrator.Pass pass, ImmutableDictionary<string, JsonElement> fields, string path)
     {
         _entry = entry;
         _pass = pass;
+        _path = path;
+        Fields = fields;
     }
 
-    public string Id => _entry.Id;
-
-    public string Type => _entry.Type;
-
-    public string Slug => _entry.Slug;
-
-    public string? Locale => _entry.Locale;
-
-    public ImmutableDictionary<string, JsonElement> Fields => _entry.Fields;
+    /// <summary>Every field as delivery sent it, references as ids.</summary>
+    public ImmutableDictionary<string, JsonElement> Fields { get; }
 
     /// <summary>Text, long text, or a choice.</summary>
     public string? Text(string field) => Value(field, "text", JsonValueKind.String, value => value.GetString());
@@ -153,7 +154,7 @@ public sealed class EntryReader
 
     public bool? Boolean(string field)
     {
-        if (!_entry.Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return null;
         }
@@ -175,22 +176,22 @@ public sealed class EntryReader
     }
 
     /// <summary>Any value, as delivery sent it: a json field, or a kind this code does not know.</summary>
-    public JsonElement? Json(string field) => _entry.Fields.TryGetValue(field, out var value) && value.ValueKind != JsonValueKind.Null ? value : null;
+    public JsonElement? Json(string field) => Fields.TryGetValue(field, out var value) && value.ValueKind != JsonValueKind.Null ? value : null;
 
     /// <summary>A reference field of one link, followed.</summary>
     public Linked<T>? Link<T>(string field)
         where T : EntryBase
     {
-        if (!_entry.Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return null;
         }
         if (value.ValueKind == JsonValueKind.String)
         {
-            return _pass.Follow<T>(_entry, field, value.GetString()!);
+            return _pass.Follow<T>(_entry, Where(field), value.GetString()!);
         }
         var what = value.ValueKind == JsonValueKind.Array ? "several links" : $"{Describe(value)}";
-        _pass.Issues.Report(IssueKind.UnexpectedValue, _entry, field, $"has {what} in '{field}', where its type has one");
+        Report(IssueKind.UnexpectedValue, field, $"has {what} in '{Where(field)}', where its type has one");
         return null;
     }
 
@@ -198,14 +199,14 @@ public sealed class EntryReader
     public IReadOnlyList<Linked<T>>? Links<T>(string field)
         where T : EntryBase
     {
-        if (!_entry.Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return null;
         }
         if (value.ValueKind != JsonValueKind.Array)
         {
             var what = value.ValueKind == JsonValueKind.String ? "one link" : Describe(value);
-            _pass.Issues.Report(IssueKind.UnexpectedValue, _entry, field, $"has {what} in '{field}', where its type has several");
+            Report(IssueKind.UnexpectedValue, field, $"has {what} in '{Where(field)}', where its type has several");
             return null;
         }
         var links = new List<Linked<T>>(value.GetArrayLength());
@@ -213,11 +214,11 @@ public sealed class EntryReader
         {
             if (item.ValueKind == JsonValueKind.String)
             {
-                links.Add(_pass.Follow<T>(_entry, field, item.GetString()!));
+                links.Add(_pass.Follow<T>(_entry, Where(field), item.GetString()!));
             }
             else
             {
-                _pass.Issues.Report(IssueKind.UnexpectedValue, _entry, field, $"has {Describe(item)} among the links in '{field}'");
+                Report(IssueKind.UnexpectedValue, field, $"has {Describe(item)} among the links in '{Where(field)}'");
             }
         }
         return links;
@@ -233,21 +234,60 @@ public sealed class EntryReader
     public IReadOnlyList<Asset>? Assets(string field) =>
         Array(field, "assets", JsonValueKind.Object, value => CohoCms.Delivery.Asset.From(value)!);
 
+    /// <summary>A repeater whose component types are not on the ref: each item untyped, as delivery sent it.</summary>
     public IReadOnlyList<RepeaterItem>? Repeater(string field)
     {
         return Array(field, "repeater items", JsonValueKind.Object, value =>
         {
-            var id = value.TryGetProperty("_id", out var itemId) && itemId.ValueKind == JsonValueKind.String ? itemId.GetString()! : "";
-            var fields = value.EnumerateObject()
-                .Where(property => property.Name != "_id")
-                .ToImmutableDictionary(property => property.Name, property => property.Value, StringComparer.Ordinal);
-            return new RepeaterItem { Id = id, Fields = fields };
+            var item = ItemReader.SystemKeys(value);
+            return new RepeaterItem { Id = item.Id, Type = item.Type, Fields = ItemReader.Own(value) };
         });
+    }
+
+    /// <summary>
+    /// A repeater's items, in order, each built by <paramref name="read"/> from its component
+    /// type. Generated code passes a switch on <see cref="ItemReader.Type"/>. An item it has no
+    /// type for, for which it returns null, is left out and reported: the code was generated
+    /// before that component was added to the field, and an item is never typed as something
+    /// it is not.
+    /// </summary>
+    public IReadOnlyList<T>? Items<T>(string field, Func<ItemReader, T?> read)
+        where T : ItemBase
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            return Unexpected<List<T>>(field, value, "a list of repeater items");
+        }
+        var items = new List<T>(value.GetArrayLength());
+        var index = 0;
+        foreach (var item in value.EnumerateArray())
+        {
+            var path = $"{Where(field)}/{index++}/";
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                Report(IssueKind.UnexpectedValue, field, $"has {Describe(item)} in '{Where(field)}', where its type has repeater items");
+                continue;
+            }
+            var reader = new ItemReader(_entry, _pass, item, path);
+            if (read(reader) is { } typed)
+            {
+                items.Add(typed);
+                continue;
+            }
+            var what = reader.Type == "" ? "an item with no type" : $"an item of '{reader.Type}'";
+            Report(IssueKind.UnknownItem, field, $"has {what} in '{Where(field)}', which this code has no type for; it is left out");
+        }
+        return items;
     }
 
     private T? Value<T>(string field, string expected, JsonValueKind kind, Func<JsonElement, T?> read)
     {
-        if (!_entry.Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return default;
         }
@@ -260,7 +300,7 @@ public sealed class EntryReader
 
     private List<T>? Array<T>(string field, string expected, JsonValueKind kind, Func<JsonElement, T> read)
     {
-        if (!_entry.Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
+        if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
             return null;
         }
@@ -277,7 +317,7 @@ public sealed class EntryReader
             }
             else
             {
-                _pass.Issues.Report(IssueKind.UnexpectedValue, _entry, field, $"has {Describe(item)} in '{field}', where its type has {expected}");
+                Report(IssueKind.UnexpectedValue, field, $"has {Describe(item)} in '{Where(field)}', where its type has {expected}");
             }
         }
         return items;
@@ -285,9 +325,14 @@ public sealed class EntryReader
 
     private T? Unexpected<T>(string field, JsonElement value, string expected)
     {
-        _pass.Issues.Report(IssueKind.UnexpectedValue, _entry, field, $"has {Describe(value)} in '{field}', where its type has {expected}");
+        Report(IssueKind.UnexpectedValue, field, $"has {Describe(value)} in '{Where(field)}', where its type has {expected}");
         return default;
     }
+
+    /// <summary>The field's place in the entry: its id, or for an item's field, such as <c>citations/0/year</c>, its path.</summary>
+    private string Where(string field) => _path + field;
+
+    private void Report(IssueKind kind, string field, string what) => _pass.Issues.Report(kind, _entry, Where(field), what);
 
     private static string Describe(JsonElement value) => value.ValueKind switch
     {
@@ -298,4 +343,57 @@ public sealed class EntryReader
         JsonValueKind.Object => "an object",
         _ => "an unknown value",
     };
+}
+
+/// <summary>One entry's values, read for the record a <see cref="TypeShape.Read"/> builds.</summary>
+public sealed class EntryReader : FieldReader
+{
+    private readonly Entry _entry;
+
+    internal EntryReader(Entry entry, Hydrator.Pass pass)
+        : base(entry, pass, entry.Fields, "")
+    {
+        _entry = entry;
+    }
+
+    public string Id => _entry.Id;
+
+    public string Type => _entry.Type;
+
+    public string Slug => _entry.Slug;
+
+    public string? Locale => _entry.Locale;
+}
+
+/// <summary>
+/// One repeater item's values, read for the record of its component type. Its fields are
+/// read as an entry's are; <see cref="Id"/> and <see cref="Type"/> are its system keys.
+/// </summary>
+public sealed class ItemReader : FieldReader
+{
+    internal ItemReader(Entry entry, Hydrator.Pass pass, JsonElement item, string path)
+        : base(entry, pass, Own(item), path)
+    {
+        (Id, Type) = SystemKeys(item);
+    }
+
+    /// <summary>The item's identity, stable across edits, moves and merges.</summary>
+    public string Id { get; }
+
+    /// <summary>The component type's slug: what generated code switches on. Empty when the item has none.</summary>
+    public string Type { get; }
+
+    /// <summary>An item's <c>_id</c> and <c>_type</c>, each empty when it has none.</summary>
+    internal static (string Id, string Type) SystemKeys(JsonElement item) => (Key(item, "_id"), Key(item, "_type"));
+
+    /// <summary>An item's own fields: everything but its system keys.</summary>
+    internal static ImmutableDictionary<string, JsonElement> Own(JsonElement item)
+    {
+        return item.EnumerateObject()
+            .Where(property => property.Name is not ("_id" or "_type"))
+            .ToImmutableDictionary(property => property.Name, property => property.Value, StringComparer.Ordinal);
+    }
+
+    private static string Key(JsonElement item, string name) =>
+        item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()! : "";
 }

@@ -95,6 +95,23 @@ public sealed record Asset
         return string.Join(", ", offered.Select(each => $"{At(each)} {each}w"));
     }
 
+    /// <summary>
+    /// A URL that downloads the asset rather than opening it: the original, with <c>dl=1</c>
+    /// asking the edge to send it as an attachment under its filename. A browser ignores the
+    /// <c>download</c> attribute on a link to another origin, which the asset CDN is, so the
+    /// edge has to say it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ The edge does not honour <c>dl</c> yet (doc 40 §5.1). Until it does, the file opens
+    /// in the browser as <see cref="Url"/> does; the link needs no change when it starts to.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The asset has no URL: the deployment serving it has no asset CDN.</exception>
+    public string Download()
+    {
+        var url = Original();
+        return $"{url}{(url.Contains('?', StringComparison.Ordinal) ? '&' : '?')}dl=1";
+    }
+
     private string Query(ImageOptions options)
     {
         var parameters = new List<(string Name, string Value)>();

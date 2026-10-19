@@ -10,7 +10,8 @@ internal sealed record Generated(IReadOnlyList<GeneratedFile> Files, IReadOnlyLi
 
 /// <summary>
 /// The C# for a type model: a file per content type holding its record, such as
-/// <c>BlogPost.cs</c>, and <c>Coho.cs</c>, the client that reads them all.
+/// <c>BlogPost.cs</c>, one per component type, such as <c>Citation.cs</c>, and <c>Coho.cs</c>,
+/// the client that reads them all.
 /// </summary>
 /// <remarks>
 /// A pure function of the model and the namespace, so the same model always gives the
@@ -34,7 +35,7 @@ internal static class Generator
     private static readonly HashSet<string> ReservedTypeNames =
     [
         "Coho", "ContentServiceCollectionExtensions", "SortBy", "Source",
-        "ClientOptions", "ContentClient", "ContentConfig", "EntryBase", "EntryReader", "ISortOrder", "Linked", "LinkKind",
+        "ClientOptions", "ContentClient", "ContentConfig", "EntryBase", "EntryReader", "ISortOrder", "ItemBase", "ItemReader", "Linked", "LinkKind",
         "NoSortOrder", "ReadOptions", "RepeaterItem", "TypeReader", "TypeShape",
         "CancellationToken", "DateTimeOffset", "Dictionary", "Func", "IHttpClientBuilder", "IReadOnlyCollection",
         "IReadOnlyDictionary", "IReadOnlyList", "IServiceCollection", "IServiceProvider", "ImmutableDictionary",
@@ -68,9 +69,13 @@ internal static class Generator
         }
 
         var types = model.Types.Keys.Order(StringComparer.Ordinal).Select(slug => model.Types[slug]).ToList();
-        var names = TypeNames(types, warnings);
-        var files = new List<GeneratedFile> { ClientFile(model, @namespace, types, names, warnings) };
-        files.AddRange(types.Select(type => TypeFile(type, @namespace, names, warnings)));
+        // Since type model 1.2. Content and component types share one slug namespace, so
+        // they share one set of names too.
+        var components = model.Components.Keys.Order(StringComparer.Ordinal).Select(slug => model.Components[slug]).ToList();
+        var names = new Names(TypeNames([.. types, .. components], warnings), components.Select(component => component.Slug).ToHashSet(StringComparer.Ordinal));
+        var files = new List<GeneratedFile> { ClientFile(model, @namespace, types, names.Types, warnings) };
+        files.AddRange(types.Select(type => TypeFile(type, @namespace, names, warnings, component: false)));
+        files.AddRange(components.Select(component => TypeFile(component, @namespace, names, warnings, component: true)));
         SameFileCheck(files);
         return new Generated(files, warnings);
     }
@@ -78,6 +83,10 @@ internal static class Generator
     /* NAMES */
     /* NAMES */
     /* NAMES */
+
+    /// <param name="Types">Every content and component type's record name, by slug.</param>
+    /// <param name="Components">The slugs that are component types.</param>
+    private sealed record Names(Dictionary<string, string> Types, HashSet<string> Components);
 
     /// <summary><c>blogPost</c> becomes <c>BlogPost</c>. Slugs start lowercase, so no two types share a name.</summary>
     private static Dictionary<string, string> TypeNames(List<ContentType> types, List<string> warnings)
@@ -174,12 +183,17 @@ internal static class Generator
     /* CONTENT TYPES */
     /* CONTENT TYPES */
 
-    /// <summary>One content type's record: its fields, how it is read, and its choices and sort order.</summary>
-    private static GeneratedFile TypeFile(ContentType type, string @namespace, Dictionary<string, string> names, List<string> warnings)
+    /// <summary>
+    /// One content or component type's record: its fields, how it is read, and its choices and
+    /// sort order. A component is a repeater item, so it derives from <c>ItemBase</c> and is
+    /// read by an <c>ItemReader</c>, where a content type derives from <c>EntryBase</c>.
+    /// </summary>
+    private static GeneratedFile TypeFile(ContentType type, string @namespace, Names names, List<string> warnings, bool component)
     {
-        var name = names[type.Slug];
+        var name = names.Types[type.Slug];
+        var (@base, reader, variable) = component ? ("ItemBase", "ItemReader", "item") : ("EntryBase", "EntryReader", "entry");
         var properties = PropertyNames(type, name, warnings);
-        var fields = type.Fields.Select(field => (Field: field, Property: properties[field.Id], Shape: FieldShape(type, field, names, warnings))).ToList();
+        var fields = type.Fields.Select(field => (Field: field, Property: properties[field.Id], Shape: FieldShape(type, field, variable, names, warnings))).ToList();
 
         var o = new Lines();
         o.Add(Header);
@@ -195,16 +209,16 @@ internal static class Generator
         o.Add();
         o.Add($"namespace {@namespace};");
         o.Add();
-        o.Add(Summary(type.Name, ""));
-        o.Add($"public sealed record {name} : EntryBase");
+        o.Add(Summary(type.Name, component ? "A repeater item, stored in the entry that holds it." : ""));
+        o.Add($"public sealed record {name} : {@base}");
         o.Add("{");
         o.Add(1, $"public {name}()");
         o.Add(1, "{");
         o.Add(1, "}");
         o.Add();
         o.Add(1, "[SetsRequiredMembers]");
-        o.Add(1, $"internal {name}(EntryReader entry)");
-        o.Add(2, ": base(entry)");
+        o.Add(1, $"internal {name}({reader} {variable})");
+        o.Add(2, $": base({variable})");
         o.Add(1, "{");
         foreach (var (_, property, shape) in fields)
         {
@@ -215,7 +229,7 @@ internal static class Generator
         foreach (var (field, property, shape) in fields)
         {
             o.Add();
-            o.Add(1, Summary(field.Name, Note(field, shape)));
+            o.Add(1, Summary(field.Name, Note(field, shape, names)));
             o.Add(1, $"public {shape.Type} {property} {{ get; init; }}{shape.Initializer}");
         }
 
@@ -283,7 +297,7 @@ internal static class Generator
     private static bool IsChoice(Field field) => field.Kind is "choice" or "multichoice";
 
     /// <param name="Type">The property's C# type.</param>
-    /// <param name="Read">How the constructor reads it from an <c>EntryReader</c> named <c>entry</c>.</param>
+    /// <param name="Read">How the constructor reads it from its reader: an <c>EntryReader</c> named <c>entry</c>, or an <c>ItemReader</c> named <c>item</c>.</param>
     /// <param name="Initializer">Its default, for a record built by hand.</param>
     /// <param name="List">Whether it is a list, empty rather than null when the entry has no value.</param>
     private sealed record Shape(string Type, string Read, string Initializer = "", bool List = false);
@@ -292,7 +306,7 @@ internal static class Generator
     /// One field's C# type, and how it is read, following the type model's mapping rules. A
     /// field delivery always includes is not nullable; a list is never null.
     /// </summary>
-    private static Shape FieldShape(ContentType type, Field field, Dictionary<string, string> names, List<string> warnings)
+    private static Shape FieldShape(ContentType type, Field field, string entry, Names names, List<string> warnings)
     {
         var id = Literal(field.Id);
         Shape Scalar(string clr, string read, string fallback)
@@ -304,55 +318,74 @@ internal static class Generator
         {
             case "text":
             case "longText":
-                return Scalar("string", $"entry.Text({id})", "\"\"");
+                return Scalar("string", $"{entry}.Text({id})", "\"\"");
             case "datetime":
-                return Scalar("DateTimeOffset", $"entry.DateTime({id})", "default");
+                return Scalar("DateTimeOffset", $"{entry}.DateTime({id})", "default");
             case "integer":
-                return Scalar("long", $"entry.Integer({id})", "default");
+                return Scalar("long", $"{entry}.Integer({id})", "default");
             case "number":
-                return Scalar("double", $"entry.Number({id})", "default");
+                return Scalar("double", $"{entry}.Number({id})", "default");
             case "boolean":
-                return Scalar("bool", $"entry.Boolean({id})", "default");
+                return Scalar("bool", $"{entry}.Boolean({id})", "default");
             case "json":
-                return new Shape("JsonElement?", $"entry.Json({id})");
+                return new Shape("JsonElement?", $"{entry}.Json({id})");
             case "choice":
             {
                 var choice = ChoiceName(Pascal(field.Id));
                 return field.Always
-                    ? new Shape(choice, $"new {choice}(entry.Text({id}) ?? \"\")", $" = new(\"\");")
-                    : new Shape($"{choice}?", $"{choice}.From(entry.Text({id}))");
+                    ? new Shape(choice, $"new {choice}({entry}.Text({id}) ?? \"\")", $" = new(\"\");")
+                    : new Shape($"{choice}?", $"{choice}.From({entry}.Text({id}))");
             }
             case "multichoice":
             {
                 var choice = ChoiceName(Pascal(field.Id));
-                return new Shape($"IReadOnlyList<{choice}>", $"entry.Texts({id})?.Select(value => new {choice}(value)).ToList() ?? []", " = [];", List: true);
+                return new Shape($"IReadOnlyList<{choice}>", $"{entry}.Texts({id})?.Select(value => new {choice}(value)).ToList() ?? []", " = [];", List: true);
             }
             case "reference":
             {
                 // No target, or several: an entry of any type, narrowed by pattern matching.
-                var target = field.Of.Count == 1 && names.TryGetValue(field.Of[0], out var only) ? only : "EntryBase";
+                var target = field.Of.Count == 1 && !names.Components.Contains(field.Of[0]) && names.Types.TryGetValue(field.Of[0], out var only) ? only : "EntryBase";
                 return field.Many
-                    ? new Shape($"IReadOnlyList<Linked<{target}>>", $"entry.Links<{target}>({id}) ?? []", " = [];", List: true)
-                    : new Shape($"Linked<{target}>?", $"entry.Link<{target}>({id})");
+                    ? new Shape($"IReadOnlyList<Linked<{target}>>", $"{entry}.Links<{target}>({id}) ?? []", " = [];", List: true)
+                    : new Shape($"Linked<{target}>?", $"{entry}.Link<{target}>({id})");
             }
             case "asset":
                 // Embedded by delivery, never a link to follow. One that is gone on the ref
                 // is null, required or not, so a single asset is always nullable; in a list a
                 // gone asset is left out (coho-sdk-spec, "Asset fields").
                 return field.Many
-                    ? new Shape("IReadOnlyList<Asset>", $"entry.Assets({id}) ?? []", " = [];", List: true)
-                    : new Shape("Asset?", $"entry.Asset({id})");
+                    ? new Shape("IReadOnlyList<Asset>", $"{entry}.Assets({id}) ?? []", " = [];", List: true)
+                    : new Shape("Asset?", $"{entry}.Asset({id})");
             case "repeater":
-                return new Shape("IReadOnlyList<RepeaterItem>", $"entry.Repeater({id}) ?? []", " = [];", List: true);
+            {
+                // A record per component on the ref, built by a switch on the item's type. An
+                // item of any other component is left out by the runtime, so the list is never
+                // wrong about what it holds. Several components are an ItemBase each, narrowed
+                // by pattern matching, as a link with several targets is an EntryBase.
+                var components = field.Of.Where(names.Components.Contains).ToList();
+                if (components.Count == 0)
+                {
+                    return new Shape("IReadOnlyList<RepeaterItem>", $"{entry}.Repeater({id}) ?? []", " = [];", List: true);
+                }
+                var item = components.Count == 1 ? names.Types[components[0]] : "ItemBase";
+                var arms = components.Select(slug => $"{Literal(slug)} => new {names.Types[slug]}(each), ");
+                var read = $"static each => each.Type switch {{ {string.Concat(arms)}_ => null }}";
+                return new Shape($"IReadOnlyList<{item}>", $"{entry}.Items<{item}>({id}, {read}) ?? []", " = [];", List: true);
+            }
             default:
                 warnings.Add($"{type.Slug}.{field.Id} is a '{field.Kind}', which this generator does not know; it is read as JSON. Upgrade CohoCms.Codegen.");
-                return new Shape("JsonElement?", $"entry.Json({id})");
+                return new Shape("JsonElement?", $"{entry}.Json({id})");
         }
     }
 
-    private static string Note(Field field, Shape shape)
+    private static string Note(Field field, Shape shape, Names names)
     {
         var notes = new List<string>();
+        var components = field.Kind == "repeater" ? field.Of.Where(names.Components.Contains).Select(slug => names.Types[slug]).ToList() : [];
+        if (components.Count > 1)
+        {
+            notes.Add($"Each item is {Either(components)}: match on its type.");
+        }
         if (field.Kind == "longText" && field.TextFormat == "markdown")
         {
             notes.Add("Markdown.");
@@ -537,6 +570,10 @@ internal static class Generator
         var text = string.Join(". ", new[] { Clean(name), note }.Where(part => part != ""));
         return $"/// <summary>{Xml(text)}</summary>";
     }
+
+    /// <summary><c>A or B</c>, or <c>A, B, or C</c>.</summary>
+    private static string Either(List<string> names) =>
+        names.Count == 2 ? $"{names[0]} or {names[1]}" : $"{string.Join(", ", names[..^1])}, or {names[^1]}";
 
     private static string Clean(string name) => string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 

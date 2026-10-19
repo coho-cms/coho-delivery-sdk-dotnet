@@ -12,6 +12,7 @@ internal static class Fixtures
         ["cli-next-blog"] = "Golden.CliNextBlog",
         ["delivery-fixture"] = "Golden.DeliveryFixture",
         ["assets"] = "Golden.Assets",
+        ["repeaters"] = "Golden.Repeaters",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");
@@ -39,20 +40,34 @@ internal static class Fixtures
     }
 
     /// <summary>A type model with the given types, each field filled out with the defaults a plain optional field has.</summary>
-    public static TypeModel ModelOf(Dictionary<string, JsonObject[]> types, bool immutable = true, string @ref = "v1.0.0", JsonArray? warnings = null)
+    public static TypeModel ModelOf(
+        Dictionary<string, JsonObject[]> types,
+        bool immutable = true,
+        string @ref = "v1.0.0",
+        JsonArray? warnings = null,
+        Dictionary<string, JsonObject[]>? components = null)
     {
-        var json = new JsonObject
+        static JsonObject Types(Dictionary<string, JsonObject[]> types)
         {
-            ["irVersion"] = "1.0",
-            ["source"] = new JsonObject { ["project"] = "p1", ["ref"] = @ref, ["immutable"] = immutable, ["schemaHash"] = "sha256:0" },
-            ["types"] = new JsonObject(types.Select(type => KeyValuePair.Create<string, JsonNode?>(type.Key, new JsonObject
+            return new JsonObject(types.Select(type => KeyValuePair.Create<string, JsonNode?>(type.Key, new JsonObject
             {
                 ["slug"] = type.Key,
                 ["name"] = type.Key,
                 ["version"] = "v",
                 ["fields"] = new JsonArray(type.Value.Select(Field).ToArray()),
-            }))),
+            })));
+        }
+
+        var json = new JsonObject
+        {
+            ["irVersion"] = components is null ? "1.0" : "1.2",
+            ["source"] = new JsonObject { ["project"] = "p1", ["ref"] = @ref, ["immutable"] = immutable, ["schemaHash"] = "sha256:0" },
+            ["types"] = Types(types),
         };
+        if (components is not null)
+        {
+            json["components"] = Types(components);
+        }
         if (warnings is not null)
         {
             json["warnings"] = warnings;

@@ -20,6 +20,9 @@ internal sealed record TypeModel
     /// <summary>Content types by slug.</summary>
     public required Dictionary<string, ContentType> Types { get; init; }
 
+    /// <summary>Component types by slug, the items repeaters hold. Since 1.2; empty before.</summary>
+    public Dictionary<string, ContentType> Components { get; set; } = [];
+
     public List<ModelWarning> Warnings { get; set; } = [];
 }
 
@@ -67,7 +70,7 @@ internal sealed record Field
 
     public bool Many { get; set; }
 
-    /// <summary>Reference targets, each a key of <c>types</c>; or a repeater's component types.</summary>
+    /// <summary>Reference targets, each a key of <c>types</c>; or a repeater's component types, each a key of <c>components</c>.</summary>
     public List<string> Of { get; set; } = [];
 
     public List<string> Values { get; set; } = [];

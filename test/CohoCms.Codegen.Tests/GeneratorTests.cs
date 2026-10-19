@@ -16,14 +16,16 @@ public sealed class GeneratorTests
     [MemberData(nameof(FixtureNames))]
     public void A_fixture_generates_its_expected_files_byte_for_byte(string name)
     {
-        var generated = Generator.Generate(Model(name), Namespaces[name]);
+        var model = Model(name);
+        var generated = Generator.Generate(model, Namespaces[name]);
         if (Environment.GetEnvironmentVariable("COHO_UPDATE_GOLDEN") == "1")
         {
             Files.Write(generated.Files, ExpectedSource(name));
             return;
         }
         Assert.Empty(Files.Drift(generated.Files, Expected(name)));
-        Assert.Empty(generated.Warnings);
+        // The fixtures are tags, so the only warnings are the model's own.
+        Assert.Equal(model.Warnings.Select(each => $"{each.Type}.{each.Field}: {each.Message}"), generated.Warnings);
     }
 
     [Fact]
@@ -134,12 +136,49 @@ public sealed class GeneratorTests
     }
 
     [Fact]
-    public void Repeater_items_are_typed_by_their_id_until_component_types_are()
+    public void A_repeater_whose_components_are_not_on_the_ref_holds_untyped_items()
     {
-        var generated = Generator.Generate(ModelOf(new() { ["page"] = [F("blocks", "repeater", of: ["hero"])] }), "N");
+        var generated = Generator.Generate(ModelOf(new() { ["page"] = [F("blocks", "repeater", of: [])] }), "N");
 
         Assert.Contains("public IReadOnlyList<RepeaterItem> Blocks { get; init; } = [];", Contents(generated, "Page.cs"), StringComparison.Ordinal);
         Assert.Contains("Blocks = entry.Repeater(\"blocks\") ?? [];", Contents(generated, "Page.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_component_type_is_an_item_record_of_its_own_and_a_repeater_of_several_holds_ItemBase()
+    {
+        var generated = Generator.Generate(
+            ModelOf(
+                new() { ["page"] = [F("blocks", "repeater", of: ["hero", "quote"]), F("refs", "repeater", of: ["quote"])] },
+                components: new() { ["hero"] = [F("headline")], ["quote"] = [F("text", presence: "always")] }),
+            "N");
+
+        Assert.Equal(["Coho.cs", "Page.cs", "Hero.cs", "Quote.cs"], generated.Files.Select(file => file.Path));
+        var quote = Contents(generated, "Quote.cs");
+        Assert.Contains("public sealed record Quote : ItemBase\n{", quote, StringComparison.Ordinal);
+        Assert.Contains("internal Quote(ItemReader item)\n        : base(item)", quote, StringComparison.Ordinal);
+        Assert.Contains("Text = item.Text(\"text\") ?? \"\";", quote, StringComparison.Ordinal);
+
+        var page = Contents(generated, "Page.cs");
+        Assert.Contains("public IReadOnlyList<ItemBase> Blocks { get; init; } = [];", page, StringComparison.Ordinal);
+        Assert.Contains(
+            "Blocks = entry.Items<ItemBase>(\"blocks\", static each => each.Type switch { \"hero\" => new Hero(each), \"quote\" => new Quote(each), _ => null }) ?? [];",
+            page,
+            StringComparison.Ordinal);
+        Assert.Contains("/// <summary>blocks. Each item is Hero or Quote: match on its type.</summary>", page, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<Quote> Refs { get; init; } = [];", page, StringComparison.Ordinal);
+
+        // Exported, but not entries: no reader, and nothing to hydrate.
+        var client = Contents(generated, "Coho.cs");
+        Assert.DoesNotContain("Quote", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_component_cannot_share_a_name_with_a_content_type()
+    {
+        var refused = Assert.Throws<CodegenException>(() => Generator.Generate(ModelOf(new() { ["quote"] = [] }, components: new() { ["quote"] = [] }), "N"));
+
+        Assert.Contains("both be named Quote", refused.Message, StringComparison.Ordinal);
     }
 
     [Fact]

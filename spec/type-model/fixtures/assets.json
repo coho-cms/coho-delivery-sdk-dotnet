@@ -1,10 +1,10 @@
 {
-  "irVersion": "1.1",
+  "irVersion": "1.2",
   "source": {
     "project": "01920000-0000-7000-8000-00000000c0b2",
     "ref": "v0.0.1",
     "immutable": true,
-    "schemaHash": "sha256:335c9be24f68287a40cf78a2693f3224bcc208176efda55eba2b4348e2ed8e81"
+    "schemaHash": "sha256:8444ac344c6d6fb5d9c0abfce116f1eb6bbabb6a27163ad10ba1e995e621c09d"
   },
   "types": {
     "page": {
@@ -113,12 +113,22 @@
           "required": false,
           "localized": false,
           "sortable": false,
-          "of": [
-            "heroBlock",
-            "quoteBlock"
-          ]
+          "of": []
         }
       ]
     }
-  }
+  },
+  "components": {},
+  "warnings": [
+    {
+      "type": "page",
+      "field": "sections",
+      "message": "holds component type 'heroBlock', which is not on this ref"
+    },
+    {
+      "type": "page",
+      "field": "sections",
+      "message": "holds component type 'quoteBlock', which is not on this ref"
+    }
+  ]
 }

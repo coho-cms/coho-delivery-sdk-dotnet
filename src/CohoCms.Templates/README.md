@@ -3,7 +3,7 @@
 `dotnet new coho-library`: creates your content library for Coho CMS, a .NET library generated from your project's content types, that your sites and services reference.
 
 ```bash
-dotnet new install CohoCms.Templates::0.1.0-alpha.2
+dotnet new install CohoCms.Templates::0.1.0-alpha.3
 dotnet new coho-library -n Acme.Content
 cd Acme.Content
 dotnet tool restore
@@ -18,7 +18,7 @@ It copies the [library template](https://github.com/coho-cms/coho-template-dotne
 coho token create --role viewer --label "acme-content library"
 ```
 
-**A version of CohoCms.Templates always creates the same library.** It carries the template it was released with, and pins the library to `CohoCms.Delivery` and `CohoCms.Codegen` at its own version: `CohoCms.Templates` `0.1.0-alpha.2` creates libraries on `0.1.0-alpha.2`.
+**A version of CohoCms.Templates always creates the same library.** It carries the template it was released with, and pins the library to `CohoCms.Delivery` and `CohoCms.Codegen` at its own version: `CohoCms.Templates` `0.1.0-alpha.3` creates libraries on `0.1.0-alpha.3`.
 
 ## License
 

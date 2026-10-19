@@ -1,10 +1,10 @@
 {
-  "irVersion": "1.1",
+  "irVersion": "1.2",
   "source": {
     "project": "01920000-0000-7000-8000-00000000c0b1",
     "ref": "v0.0.1",
     "immutable": true,
-    "schemaHash": "sha256:1d88dfdab77e7a50884fc0968f14dbdfd98cdc88294cd76f55c7fddd5011ac5d"
+    "schemaHash": "sha256:7cb3daf41cbe9c34e84797f25ff4f3b681d18d3e3281c221b28c51b3dd8a24f2"
   },
   "types": {
     "article": {
@@ -103,6 +103,18 @@
           "sortable": false,
           "many": true,
           "accept": []
+        },
+        {
+          "id": "sources",
+          "name": "sources",
+          "kind": "repeater",
+          "presence": "maybe",
+          "required": false,
+          "localized": false,
+          "sortable": false,
+          "of": [
+            "citation"
+          ]
         }
       ]
     },
@@ -123,6 +135,51 @@
         {
           "id": "message",
           "name": "message",
+          "kind": "text",
+          "presence": "maybe",
+          "required": false,
+          "localized": false,
+          "sortable": false
+        }
+      ]
+    }
+  },
+  "components": {
+    "citation": {
+      "slug": "citation",
+      "name": "Citation",
+      "version": "01920000-0000-7000-8000-0000000000b9",
+      "fields": [
+        {
+          "id": "authors",
+          "name": "authors",
+          "kind": "text",
+          "presence": "always",
+          "required": true,
+          "localized": false,
+          "sortable": false
+        },
+        {
+          "id": "year",
+          "name": "year",
+          "kind": "integer",
+          "presence": "always",
+          "required": true,
+          "localized": false,
+          "sortable": false
+        },
+        {
+          "id": "title",
+          "name": "title",
+          "kind": "text",
+          "presence": "always",
+          "required": true,
+          "localized": false,
+          "sortable": false
+        },
+        {
+          "id": "url",
+          "name": "url",
           "kind": "text",
           "presence": "maybe",
           "required": false,

@@ -133,13 +133,62 @@ public static class Linked
     {
         return new Linked<T>(id, null, reason);
     }
+
+    /// <summary>
+    /// The entries that are here, in order: <c>post.Tags.Resolved()</c>. Stubs are left out,
+    /// such as a link to a deleted tag, or one beyond the depth the read asked for.
+    /// </summary>
+    public static IEnumerable<T> Resolved<T>(this IEnumerable<Linked<T>> links)
+        where T : EntryBase
+    {
+        ArgumentNullException.ThrowIfNull(links);
+        foreach (var link in links)
+        {
+            if (link.TryGetValue(out var value))
+            {
+                yield return value;
+            }
+        }
+    }
 }
 
-/// <summary>An item of a repeater. Its own fields are not typed until component types are.</summary>
+/// <summary>
+/// What every typed repeater item has: its identity, stable across edits, moves and merges,
+/// and the component type it is. Generated code derives a record for each component type
+/// from it. A repeater that holds several is a list of these: match on the record's type to
+/// narrow an item.
+/// </summary>
+/// <remarks>Plain data, like an entry: an item lives inside the entry that holds it.</remarks>
+public abstract record ItemBase
+{
+    protected ItemBase()
+    {
+    }
+
+    /// <summary>The system values of the item <paramref name="item"/> is reading.</summary>
+    [SetsRequiredMembers]
+    protected ItemBase(ItemReader item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        Id = item.Id;
+        Type = item.Type;
+    }
+
+    public required string Id { get; init; }
+
+    /// <summary>The component type's slug.</summary>
+    public required string Type { get; init; }
+}
+
+/// <summary>An item of a repeater whose component types are not on the ref, so its fields are not typed.</summary>
 public sealed record RepeaterItem
 {
     public required string Id { get; init; }
 
+    /// <summary>The component type's slug, when the item has one.</summary>
+    public string? Type { get; init; }
+
+    /// <summary>Every field but the system keys, as delivery sent it.</summary>
     public ImmutableDictionary<string, JsonElement> Fields { get; init; } = ImmutableDictionary<string, JsonElement>.Empty;
 }
 
@@ -184,6 +233,12 @@ public enum IssueKind
     /// content disagree about the field.
     /// </summary>
     UnlistedLink,
+
+    /// <summary>
+    /// A repeater item of a component the code has no type for, left out of the list. The
+    /// code was generated before that component was added to the field.
+    /// </summary>
+    UnknownItem,
 }
 
 /// <summary>Something about an entry that its type says cannot happen. Reported, never thrown.</summary>

@@ -91,9 +91,18 @@ public sealed class AssetTests
     }
 
     [Fact]
+    public void A_download_asks_the_edge_for_an_attachment_of_any_file()
+    {
+        Assert.Equal($"{Base}/a/abc/bridge.jpg?dl=1", Photo.Download());
+        Assert.Equal($"{Base}/a/def/logo.svg?dl=1", Logo.Download());
+        Assert.Equal($"{Base}/a/abc/x.pdf?v=2&dl=1", (Logo with { Url = $"{Base}/a/abc/x.pdf?v=2" }).Download());
+    }
+
+    [Fact]
     public void An_asset_with_no_url_says_why()
     {
         var error = Assert.Throws<InvalidOperationException>(() => new Asset().Image());
         Assert.Contains("no asset CDN", error.Message);
+        Assert.Throws<InvalidOperationException>(() => new Asset().Download());
     }
 }
