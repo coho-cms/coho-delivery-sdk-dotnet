@@ -47,6 +47,12 @@ internal sealed record ContentType
 
     public string Version { get; set; } = "";
 
+    /// <summary>Since 1.3: the slug of the type this one extends, a key of the same map. Its <c>fields</c> already include what it inherits.</summary>
+    public string? Extends { get; set; }
+
+    /// <summary>Since 1.3: no entry is of this type itself, only its descendants.</summary>
+    public bool Abstract { get; set; }
+
     public required List<Field> Fields { get; init; }
 }
 
@@ -79,6 +85,9 @@ internal sealed record Field
     public List<string> Accept { get; set; } = [];
 
     public string? TextFormat { get; set; }
+
+    /// <summary>Since 1.3: the field reaches this type exactly as its parent has it.</summary>
+    public bool Inherited { get; set; }
 
     public bool Always => Presence == "always";
 }

@@ -48,6 +48,15 @@
         "slug": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1, "description": "The editors' display name; the slug when there is none." },
         "version": { "type": "string", "format": "uuid", "description": "The type version this ref pins." },
+        "extends": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Since 1.3: the slug of the type this one extends, a key of the same map (`types` or `components`). Absent for a type with no parent, or whose parent is not on this ref (reported in `warnings`). The type's `fields` already include everything it inherits (doc 05 §9)."
+        },
+        "abstract": {
+          "const": true,
+          "description": "Since 1.3: present, and true, when no entry is of this type itself, only its descendants'. A reference to it links to one of those."
+        },
         "fields": {
           "type": "array",
           "description": "In declaration order. Fields hidden from the API are not listed.",
@@ -72,6 +81,10 @@
         "required": { "type": "boolean", "description": "Enforced when an entry is written." },
         "localized": { "type": "boolean", "description": "Delivered as one locale's value, and absent where that locale has no translation." },
         "sortable": { "type": "boolean", "description": "Accepted by delivery's `order` on a list of this type." },
+        "inherited": {
+          "const": true,
+          "description": "Since 1.3: present, and true, when the field reaches this type exactly as its parent has it: declared by an ancestor, and tightened by none of this type's overrides. A generator may then declare it on the parent alone."
+        },
         "many": { "type": "boolean", "description": "On references and assets: an array of links rather than one." },
         "accept": {
           "type": "array",

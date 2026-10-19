@@ -72,8 +72,12 @@ internal static class Generator
         // Since type model 1.2. Content and component types share one slug namespace, so
         // they share one set of names too.
         var components = model.Components.Keys.Order(StringComparer.Ordinal).Select(slug => model.Components[slug]).ToList();
-        var names = new Names(TypeNames([.. types, .. components], warnings), components.Select(component => component.Slug).ToHashSet(StringComparer.Ordinal));
-        var files = new List<GeneratedFile> { ClientFile(model, @namespace, types, names.Types, warnings) };
+        var names = new Names(
+            TypeNames([.. types, .. components], warnings),
+            components.Select(component => component.Slug).ToHashSet(StringComparer.Ordinal),
+            new Hierarchy([.. types, .. components]),
+            new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal));
+        var files = new List<GeneratedFile> { ClientFile(model, @namespace, types, names, warnings) };
         files.AddRange(types.Select(type => TypeFile(type, @namespace, names, warnings, component: false)));
         files.AddRange(components.Select(component => TypeFile(component, @namespace, names, warnings, component: true)));
         SameFileCheck(files);
@@ -86,7 +90,52 @@ internal static class Generator
 
     /// <param name="Types">Every content and component type's record name, by slug.</param>
     /// <param name="Components">The slugs that are component types.</param>
-    private sealed record Names(Dictionary<string, string> Types, HashSet<string> Components);
+    /// <param name="Hierarchy">Which types extend which (type model 1.3).</param>
+    /// <param name="Properties">Each type's property names by field id, its inherited fields' included, once worked out.</param>
+    private sealed record Names(Dictionary<string, string> Types, HashSet<string> Components, Hierarchy Hierarchy, Dictionary<string, Dictionary<string, string>> Properties);
+
+    /// <summary>
+    /// Type inheritance (type model 1.3). A type that extends another derives from its
+    /// record, so a read or a link of a base type is a record of any type in its family,
+    /// narrowed by pattern matching. Every type's fields include those it inherits; its
+    /// record declares only the ones its parent does not have.
+    /// </summary>
+    private sealed class Hierarchy
+    {
+        private readonly Dictionary<string, ContentType> _types;
+        private readonly Dictionary<string, List<string>> _below = new(StringComparer.Ordinal);
+
+        public Hierarchy(List<ContentType> types)
+        {
+            _types = types.ToDictionary(type => type.Slug, StringComparer.Ordinal);
+            foreach (var type in types)
+            {
+                var seen = new HashSet<string>(StringComparer.Ordinal) { type.Slug };
+                for (var above = Parent(type); above is not null; above = Parent(above))
+                {
+                    // The server refuses a cycle, so this only stops a broken file: C# refuses one too.
+                    if (!seen.Add(above.Slug))
+                    {
+                        throw new CodegenException($"Type '{type.Slug}' extends itself, through '{above.Slug}'; the type model is broken");
+                    }
+                    if (!_below.TryGetValue(above.Slug, out var below))
+                    {
+                        _below[above.Slug] = below = [];
+                    }
+                    below.Add(type.Slug);
+                }
+            }
+        }
+
+        /// <summary>The type <paramref name="type"/> extends, or null when it extends none on this ref.</summary>
+        public ContentType? Parent(ContentType type) => type.Extends is { } slug && _types.TryGetValue(slug, out var parent) ? parent : null;
+
+        public bool HasDescendants(string slug) => _below.ContainsKey(slug);
+
+        /// <summary>The types an entry or item of <paramref name="slug"/> can be: itself unless abstract, and each concrete descendant, by slug.</summary>
+        public List<string> Concrete(string slug) =>
+            [.. new[] { slug }.Concat(_below.GetValueOrDefault(slug) ?? []).Where(each => _types.TryGetValue(each, out var type) && !type.Abstract).Order(StringComparer.Ordinal)];
+    }
 
     /// <summary><c>blogPost</c> becomes <c>BlogPost</c>. Slugs start lowercase, so no two types share a name.</summary>
     private static Dictionary<string, string> TypeNames(List<ContentType> types, List<string> warnings)
@@ -110,13 +159,22 @@ internal static class Generator
         return names;
     }
 
-    /// <summary>Each field's property name, and the names of the types nested in the record.</summary>
-    private static Dictionary<string, string> PropertyNames(ContentType type, string typeName, List<string> warnings)
+    /// <summary>
+    /// Each field's property name, by field id. A field the type inherits keeps the name its
+    /// parent gave it, so only the fields the type adds are named here.
+    /// </summary>
+    private static Dictionary<string, string> PropertyNames(ContentType type, Names all, List<string> warnings)
     {
-        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (all.Properties.TryGetValue(type.Slug, out var known))
+        {
+            return known;
+        }
+        var parent = all.Hierarchy.Parent(type);
+        var names = parent is null ? new Dictionary<string, string>(StringComparer.Ordinal) : new Dictionary<string, string>(PropertyNames(parent, all, warnings), StringComparer.Ordinal);
+        var typeName = all.Types[type.Slug];
         var nested = type.Fields.Where(IsChoice).Select(field => ChoiceName(Pascal(field.Id))).ToHashSet(StringComparer.Ordinal);
-        var taken = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var field in type.Fields)
+        var taken = names.Values.ToHashSet(StringComparer.Ordinal);
+        foreach (var field in type.Fields.Where(field => !names.ContainsKey(field.Id)))
         {
             var name = Pascal(field.Id);
             if (ReservedFieldNames.Contains(name) || name == typeName || nested.Contains(name))
@@ -130,6 +188,7 @@ internal static class Generator
             }
             names[field.Id] = name;
         }
+        all.Properties[type.Slug] = names;
         return names;
     }
 
@@ -192,8 +251,33 @@ internal static class Generator
     {
         var name = names.Types[type.Slug];
         var (@base, reader, variable) = component ? ("ItemBase", "ItemReader", "item") : ("EntryBase", "EntryReader", "entry");
-        var properties = PropertyNames(type, name, warnings);
-        var fields = type.Fields.Select(field => (Field: field, Property: properties[field.Id], Shape: FieldShape(type, field, variable, names, warnings))).ToList();
+        var properties = PropertyNames(type, names, warnings);
+        // A type that extends another derives from its record, which declares and reads what it inherits.
+        var parent = names.Hierarchy.Parent(type);
+        var inherited = parent?.Fields.Select(field => field.Id).ToHashSet(StringComparer.Ordinal) ?? [];
+        var fields = type.Fields.Where(field => !inherited.Contains(field.Id))
+            .Select(field => (Field: field, Property: properties[field.Id], Shape: FieldShape(type, field, variable, names, warnings))).ToList();
+        // A field its parent has that this type tightens keeps its parent's C# type: what a
+        // tighter rule allows, the looser type holds.
+        var tightened = type.Fields.Where(field => inherited.Contains(field.Id) && !field.Inherited).Select(field => properties[field.Id]).ToList();
+        var modifier = type.Abstract ? "abstract " : names.Hierarchy.HasDescendants(type.Slug) ? "" : "sealed ";
+        var notes = new List<string>();
+        if (component)
+        {
+            notes.Add("A repeater item, stored in the entry that holds it.");
+        }
+        if (parent is not null)
+        {
+            notes.Add($"Extends {names.Types[parent.Slug]}, and has every field it has.");
+        }
+        if (tightened.Count > 0)
+        {
+            notes.Add($"Tightens {All(tightened)}, which {(tightened.Count == 1 ? "keeps" : "keep")} {names.Types[parent!.Slug]}'s type{(tightened.Count == 1 ? "" : "s")}.");
+        }
+        if (type.Abstract)
+        {
+            notes.Add($"Abstract: {(component ? "an item" : "an entry")} is one of the types that extend it.");
+        }
 
         var o = new Lines();
         o.Add(Header);
@@ -209,10 +293,10 @@ internal static class Generator
         o.Add();
         o.Add($"namespace {@namespace};");
         o.Add();
-        o.Add(Summary(type.Name, component ? "A repeater item, stored in the entry that holds it." : ""));
-        o.Add($"public sealed record {name} : {@base}");
+        o.Add(Summary(type.Name, string.Join(' ', notes)));
+        o.Add($"public {modifier}record {name} : {(parent is null ? @base : names.Types[parent.Slug])}");
         o.Add("{");
-        o.Add(1, $"public {name}()");
+        o.Add(1, $"{(type.Abstract ? "protected" : "public")} {name}()");
         o.Add(1, "{");
         o.Add(1, "}");
         o.Add();
@@ -239,12 +323,13 @@ internal static class Generator
             ChoiceType(o, field, property);
         }
 
-        var sortable = fields.Where(each => each.Field.Sortable).ToList();
+        // Every field it can be ordered by, inherited or not; its own SortBy hides its parent's.
+        var sortable = type.Fields.Where(field => field.Sortable).Select(field => (Field: field, Property: properties[field.Id])).ToList();
         if (sortable.Count > 0)
         {
             o.Add();
             o.Add(1, $"/// <summary>The fields a list of {Xml(type.Name)} entries can be ordered by. A default value is no order.</summary>");
-            o.Add(1, "public readonly record struct SortBy : ISortOrder");
+            o.Add(1, $"public {(parent?.Fields.Any(field => field.Sortable) == true ? "new " : "")}readonly record struct SortBy : ISortOrder");
             o.Add(1, "{");
             o.Add(2, "private SortBy(string value)");
             o.Add(2, "{");
@@ -253,7 +338,7 @@ internal static class Generator
             o.Add();
             o.Add(2, "/// <summary>The field, prefixed <c>-</c> for descending.</summary>");
             o.Add(2, "public string? Value { get; }");
-            foreach (var (field, property, _) in sortable)
+            foreach (var (field, property) in sortable)
             {
                 o.Add();
                 o.Add(2, $"/// <summary>{Xml(Clean(field.Name))}, ascending.</summary>");
@@ -362,13 +447,14 @@ internal static class Generator
                 // item of any other component is left out by the runtime, so the list is never
                 // wrong about what it holds. Several components are an ItemBase each, narrowed
                 // by pattern matching, as a link with several targets is an EntryBase.
+                // A base component's item is any concrete component in its family (type model 1.3).
                 var components = field.Of.Where(names.Components.Contains).ToList();
                 if (components.Count == 0)
                 {
                     return new Shape("IReadOnlyList<RepeaterItem>", $"{entry}.Repeater({id}) ?? []", " = [];", List: true);
                 }
                 var item = components.Count == 1 ? names.Types[components[0]] : "ItemBase";
-                var arms = components.Select(slug => $"{Literal(slug)} => new {names.Types[slug]}(each), ");
+                var arms = ItemTypes(field, names).Select(slug => $"{Literal(slug)} => new {names.Types[slug]}(each), ");
                 var read = $"static each => each.Type switch {{ {string.Concat(arms)}_ => null }}";
                 return new Shape($"IReadOnlyList<{item}>", $"{entry}.Items<{item}>({id}, {read}) ?? []", " = [];", List: true);
             }
@@ -378,10 +464,14 @@ internal static class Generator
         }
     }
 
+    /// <summary>The concrete component types a repeater's items can be, by slug: each it names, or for a base component, each in its family.</summary>
+    private static List<string> ItemTypes(Field field, Names names) =>
+        [.. field.Of.Where(names.Components.Contains).SelectMany(slug => names.Hierarchy.Concrete(slug)).Distinct()];
+
     private static string Note(Field field, Shape shape, Names names)
     {
         var notes = new List<string>();
-        var components = field.Kind == "repeater" ? field.Of.Where(names.Components.Contains).Select(slug => names.Types[slug]).ToList() : [];
+        var components = field.Kind == "repeater" ? ItemTypes(field, names).Select(slug => names.Types[slug]).ToList() : [];
         if (components.Count > 1)
         {
             notes.Add($"Each item is {Either(components)}: match on its type.");
@@ -414,9 +504,10 @@ internal static class Generator
     /* THE CLIENT */
 
     /// <summary><c>Coho.cs</c>: what reads every type, the shape the runtime hydrates with, the model's source, and <c>AddCoho</c>.</summary>
-    private static GeneratedFile ClientFile(TypeModel model, string @namespace, List<ContentType> types, Dictionary<string, string> names, List<string> warnings)
+    private static GeneratedFile ClientFile(TypeModel model, string @namespace, List<ContentType> types, Names all, List<string> warnings)
     {
-        var readers = new List<(ContentType Type, string Member, string Generic)>();
+        var names = all.Types;
+        var readers = new List<(ContentType Type, string Member, string Generic, string Family)>();
         var members = new HashSet<string>(StringComparer.Ordinal);
         foreach (var type in types)
         {
@@ -432,7 +523,11 @@ internal static class Generator
             }
             var name = names[type.Slug];
             var order = type.Fields.Any(field => field.Sortable) ? $"{name}.SortBy" : "NoSortOrder";
-            readers.Add((type, member, $"{name}, {order}"));
+            // Delivery lists a type with its descendants, so a read of one entry keeps any type in its family.
+            var family = all.Hierarchy.HasDescendants(type.Slug) && all.Hierarchy.Concrete(type.Slug) is { Count: > 0 } concrete
+                ? $", [{string.Join(", ", concrete.Select(Literal))}]"
+                : "";
+            readers.Add((type, member, $"{name}, {order}", family));
         }
 
         var kind = model.Source.Immutable ? "a tag" : "a branch, whose types can change";
@@ -466,15 +561,15 @@ internal static class Generator
         o.Add(1, "internal Coho(ContentClient content)");
         o.Add(1, "{");
         o.Add(2, "_content = content;");
-        foreach (var (type, member, generic) in readers)
+        foreach (var (type, member, generic, family) in readers)
         {
-            o.Add(2, $"{member} = content.Type<{generic}>({Literal(type.Slug)});");
+            o.Add(2, $"{member} = content.Type<{generic}>({Literal(type.Slug)}{family});");
         }
         o.Add(1, "}");
-        foreach (var (type, member, generic) in readers)
+        foreach (var (type, member, generic, family) in readers)
         {
             o.Add();
-            o.Add(1, Summary(type.Name, ""));
+            o.Add(1, Summary(type.Name, family == "" ? "" : $"Entries of every type that extends it too: match on their type."));
             o.Add(1, $"public TypeReader<{generic}> {member} {{ get; }}");
         }
         o.Add();
@@ -496,7 +591,8 @@ internal static class Generator
         o.Add(2, "return _content.ByIdsAsync(ids, options, cancellationToken);");
         o.Add(1, "}");
         o.Add();
-        ShapeOf(o, types, names);
+        // An abstract type has no entries to read.
+        ShapeOf(o, [.. types.Where(type => !type.Abstract)], names);
         o.Add();
         o.Add(1, "/// <summary>Where these types came from, for reporting which release a build was made from.</summary>");
         o.Add(1, "public static class Source");
@@ -574,6 +670,15 @@ internal static class Generator
     /// <summary><c>A or B</c>, or <c>A, B, or C</c>.</summary>
     private static string Either(List<string> names) =>
         names.Count == 2 ? $"{names[0]} or {names[1]}" : $"{string.Join(", ", names[..^1])}, or {names[^1]}";
+
+    /// <summary><c>A</c>, <c>A and B</c>, or <c>A, B, and C</c>.</summary>
+    private static string All(List<string> names) =>
+        names.Count switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            _ => $"{string.Join(", ", names[..^1])}, and {names[^1]}",
+        };
 
     private static string Clean(string name) => string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 

@@ -241,6 +241,56 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void A_type_that_extends_another_derives_from_its_record_and_declares_only_what_it_adds()
+    {
+        var generated = Generator.Generate(Model("inheritance"), "N");
+
+        Assert.Contains("public abstract record Page : EntryBase\n{\n    protected Page()", Contents(generated, "Page.cs"), StringComparison.Ordinal);
+        var service = Contents(generated, "ServicePage.cs");
+        // Not sealed: a premium service is one.
+        Assert.Contains("public record ServicePage : Page\n{", service, StringComparison.Ordinal);
+        // What it inherits is Page's to declare and read, tightened or not.
+        Assert.DoesNotContain("public string? Title {", service, StringComparison.Ordinal);
+        Assert.DoesNotContain("public long? Rank {", service, StringComparison.Ordinal);
+        Assert.Contains("Tightens Title and Summary, which keep Page's types.", service, StringComparison.Ordinal);
+        Assert.Contains("public new readonly record struct SortBy : ISortOrder", service, StringComparison.Ordinal);
+        Assert.Contains("public sealed record PremiumService : ServicePage\n{", Contents(generated, "PremiumService.cs"), StringComparison.Ordinal);
+
+        // A link to a base type is a record of any type in its family.
+        Assert.Contains("public Linked<ServicePage>? Featured { get; init; }", Contents(generated, "Menu.cs"), StringComparison.Ordinal);
+        // A repeater of a base component builds each concrete one.
+        Assert.Contains(
+            "Blocks = entry.Items<Block>(\"blocks\", static each => each.Type switch { \"quoteBlock\" => new QuoteBlock(each), \"textBlock\" => new TextBlock(each), _ => null }) ?? [];",
+            Contents(generated, "Page.cs"),
+            StringComparison.Ordinal);
+
+        var client = Contents(generated, "Coho.cs");
+        // A read of one entry keeps any type in the family, as delivery's lists do.
+        Assert.Contains("Page = content.Type<Page, Page.SortBy>(\"page\", [\"landingPage\", \"premiumService\", \"servicePage\"]);", client, StringComparison.Ordinal);
+        Assert.Contains("LandingPage = content.Type<LandingPage, LandingPage.SortBy>(\"landingPage\");", client, StringComparison.Ordinal);
+        // An abstract type has no entries to hydrate.
+        Assert.DoesNotContain("[\"page\"] = new TypeShape", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_abstract_type_with_no_concrete_descendants_reads_only_its_own_slug()
+    {
+        var generated = Generator.Generate(ModelOf(new() { ["page"] = [], ["post"] = [] }, extends: new() { ["post"] = "page" }, @abstract: ["page", "post"]), "N");
+
+        Assert.Contains("public abstract record Post : Page\n{", Contents(generated, "Post.cs"), StringComparison.Ordinal);
+        Assert.Contains("Page = content.Type<Page, NoSortOrder>(\"page\");", Contents(generated, "Coho.cs"), StringComparison.Ordinal);
+        Assert.Contains("Shape { get; } = new Dictionary<string, TypeShape>();", Contents(generated, "Coho.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_type_that_extends_itself_is_refused()
+    {
+        var refused = Assert.Throws<CodegenException>(() => Generator.Generate(ModelOf(new() { ["a"] = [], ["b"] = [] }, extends: new() { ["a"] = "b", ["b"] = "a" }), "N"));
+
+        Assert.Contains("extends itself", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_type_model_of_another_major_version_is_refused()
     {
         var refused = Assert.Throws<CodegenException>(() => TypeModels.Read("""{ "irVersion": "2.0", "source": {}, "types": {} }""", "test"));

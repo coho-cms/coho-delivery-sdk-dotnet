@@ -13,6 +13,7 @@ internal static class Fixtures
         ["delivery-fixture"] = "Golden.DeliveryFixture",
         ["assets"] = "Golden.Assets",
         ["repeaters"] = "Golden.Repeaters",
+        ["inheritance"] = "Golden.Inheritance",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");
@@ -45,22 +46,36 @@ internal static class Fixtures
         bool immutable = true,
         string @ref = "v1.0.0",
         JsonArray? warnings = null,
-        Dictionary<string, JsonObject[]>? components = null)
+        Dictionary<string, JsonObject[]>? components = null,
+        Dictionary<string, string>? extends = null,
+        string[]? @abstract = null)
     {
-        static JsonObject Types(Dictionary<string, JsonObject[]> types)
+        JsonObject Types(Dictionary<string, JsonObject[]> types)
         {
-            return new JsonObject(types.Select(type => KeyValuePair.Create<string, JsonNode?>(type.Key, new JsonObject
+            return new JsonObject(types.Select(type =>
             {
-                ["slug"] = type.Key,
-                ["name"] = type.Key,
-                ["version"] = "v",
-                ["fields"] = new JsonArray(type.Value.Select(Field).ToArray()),
-            })));
+                var json = new JsonObject
+                {
+                    ["slug"] = type.Key,
+                    ["name"] = type.Key,
+                    ["version"] = "v",
+                    ["fields"] = new JsonArray(type.Value.Select(Field).ToArray()),
+                };
+                if (extends?.GetValueOrDefault(type.Key) is { } parent)
+                {
+                    json["extends"] = parent;
+                }
+                if (@abstract?.Contains(type.Key) == true)
+                {
+                    json["abstract"] = true;
+                }
+                return KeyValuePair.Create<string, JsonNode?>(type.Key, json);
+            }));
         }
 
         var json = new JsonObject
         {
-            ["irVersion"] = components is null ? "1.0" : "1.2",
+            ["irVersion"] = extends is not null || @abstract is not null ? "1.3" : components is null ? "1.0" : "1.2",
             ["source"] = new JsonObject { ["project"] = "p1", ["ref"] = @ref, ["immutable"] = immutable, ["schemaHash"] = "sha256:0" },
             ["types"] = Types(types),
         };

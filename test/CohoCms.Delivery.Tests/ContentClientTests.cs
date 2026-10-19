@@ -61,6 +61,18 @@ public sealed class ContentClientTests
     }
 
     [Fact]
+    public async Task A_read_of_a_base_type_finds_an_entry_of_any_type_in_its_family()
+    {
+        var (client, _, _) = Content();
+
+        // As generated code reads a base type that `article` extends.
+        var chain = await client.Type<Article>("page", ["article", "landing"]).BySlugAsync("chain-1", new ReadOptions { Depth = 2 }, None);
+
+        Assert.Equal("Chain 1", chain?.Title);
+        Assert.Null(await client.Type<Article>("page", ["landing"]).BySlugAsync("chain-1", new ReadOptions { Depth = 2 }, None));
+    }
+
+    [Fact]
     public async Task The_configured_locale_is_sent_unless_a_read_names_its_own()
     {
         var (_, replay, articles) = Content();

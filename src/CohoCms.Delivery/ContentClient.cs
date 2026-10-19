@@ -60,11 +60,13 @@ public sealed class TypeReader<T, TOrder>
 {
     private readonly ContentClient _content;
     private readonly string _slug;
+    private readonly IReadOnlyCollection<string> _family;
 
-    internal TypeReader(ContentClient content, string slug)
+    internal TypeReader(ContentClient content, string slug, IReadOnlyCollection<string>? family)
     {
         _content = content;
         _slug = slug;
+        _family = family ?? [slug];
     }
 
     /// <summary>The entry with this slug, or null if there is none or it is of another type.</summary>
@@ -98,7 +100,7 @@ public sealed class TypeReader<T, TOrder>
     }
 
     // A slug is unique per ref, not per type, so a typed read checks what it found.
-    private T? OfType(EntryBase? entry) => entry is T typed && entry.Type == _slug ? typed : null;
+    private T? OfType(EntryBase? entry) => entry is T typed && _family.Contains(entry.Type) ? typed : null;
 }
 
 /// <summary>
@@ -151,18 +153,22 @@ public sealed class ContentClient
     }
 
     /// <summary>Reads of one content type, ordered by any field.</summary>
-    public TypeReader<T, SortOrder> Type<T>(string slug)
+    /// <param name="slug">The type's slug, which a list asks delivery for.</param>
+    /// <param name="family">For a type others extend, the types an entry read here can be, as delivery lists them; by default, <paramref name="slug"/>'s own.</param>
+    public TypeReader<T, SortOrder> Type<T>(string slug, IReadOnlyCollection<string>? family = null)
         where T : EntryBase
     {
-        return new TypeReader<T, SortOrder>(this, slug);
+        return new TypeReader<T, SortOrder>(this, slug, family);
     }
 
     /// <summary>Reads of one content type. Generated code names the type and its sortable fields.</summary>
-    public TypeReader<T, TOrder> Type<T, TOrder>(string slug)
+    /// <param name="slug">The type's slug, which a list asks delivery for.</param>
+    /// <param name="family">For a type others extend, the types an entry read here can be, as delivery lists them; by default, <paramref name="slug"/>'s own.</param>
+    public TypeReader<T, TOrder> Type<T, TOrder>(string slug, IReadOnlyCollection<string>? family = null)
         where T : EntryBase
         where TOrder : struct, ISortOrder
     {
-        return new TypeReader<T, TOrder>(this, slug);
+        return new TypeReader<T, TOrder>(this, slug, family);
     }
 
     internal List<EntryBase> Hydrate(EntryGraph graph) => Hydrator.Hydrate(graph, _shape, _issues);
