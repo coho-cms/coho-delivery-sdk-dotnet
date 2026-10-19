@@ -14,6 +14,7 @@ internal static class Fixtures
         ["assets"] = "Golden.Assets",
         ["repeaters"] = "Golden.Repeaters",
         ["inheritance"] = "Golden.Inheritance",
+        ["traits"] = "Golden.Traits",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");

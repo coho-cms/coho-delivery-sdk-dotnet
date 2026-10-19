@@ -23,6 +23,9 @@ internal sealed record TypeModel
     /// <summary>Component types by slug, the items repeaters hold. Since 1.2; empty before.</summary>
     public Dictionary<string, ContentType> Components { get; set; } = [];
 
+    /// <summary>Traits by slug (since 1.4): named groups of fields that types take, in a type's shape. Never types. Empty when absent.</summary>
+    public Dictionary<string, ContentType> Traits { get; set; } = [];
+
     public List<ModelWarning> Warnings { get; set; } = [];
 }
 
@@ -52,6 +55,9 @@ internal sealed record ContentType
 
     /// <summary>Since 1.3: no entry is of this type itself, only its descendants.</summary>
     public bool Abstract { get; set; }
+
+    /// <summary>Since 1.4: every trait the type has, each a key of <c>traits</c>, its ancestors' first. Its fields already include theirs.</summary>
+    public List<string> Traits { get; set; } = [];
 
     public required List<Field> Fields { get; init; }
 }
@@ -88,6 +94,9 @@ internal sealed record Field
 
     /// <summary>Since 1.3: the field reaches this type exactly as its parent has it.</summary>
     public bool Inherited { get; set; }
+
+    /// <summary>Since 1.4: the trait the field comes from, as this type has it, which may be tighter than the trait's.</summary>
+    public string? Trait { get; set; }
 
     public bool Always => Presence == "always";
 }

@@ -291,6 +291,37 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void A_trait_is_an_interface_each_record_that_takes_it_implements()
+    {
+        var generated = Generator.Generate(Model("traits"), "N");
+
+        Assert.Contains("public interface ISeo\n{", Contents(generated, "ISeo.cs"), StringComparison.Ordinal);
+        Assert.Contains("public record Page : EntryBase, ISeo\n{", Contents(generated, "Page.cs"), StringComparison.Ordinal);
+        var article = Contents(generated, "Article.cs");
+        // Its parent's record implements the parent's traits; it implements its own.
+        Assert.Contains("public sealed record Article : Page, IPublishing, ISocialCard\n{", article, StringComparison.Ordinal);
+        // What it has otherwise than the trait does, it gives as the trait has it.
+        Assert.Contains("string? IPublishing.Status => Status.Value;", article, StringComparison.Ordinal);
+        Assert.Contains("long? IPublishing.Priority => Priority;", article, StringComparison.Ordinal);
+        Assert.DoesNotContain("IPublishing.PublishedAt", article, StringComparison.Ordinal);
+        // A trait is not a type: no reader, nothing to hydrate.
+        Assert.DoesNotContain("Seo", Contents(generated, "Coho.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Code_written_against_a_trait_takes_a_record_of_any_type_with_it()
+    {
+        // The generated records, compiled into this project.
+        var article = new Golden.Traits.Article { Id = "a", Type = "article", Slug = "a", Priority = 2 };
+        var person = new Golden.Traits.Person { Id = "p", Type = "person", Slug = "p" };
+        List<Golden.Traits.ISocialCard> shared = [article, person];
+        Golden.Traits.IPublishing published = article;
+
+        Assert.Equal(2, shared.Count);
+        Assert.Equal(2, published.Priority);
+    }
+
+    [Fact]
     public void A_type_model_of_another_major_version_is_refused()
     {
         var refused = Assert.Throws<CodegenException>(() => TypeModels.Read("""{ "irVersion": "2.0", "source": {}, "types": {} }""", "test"));

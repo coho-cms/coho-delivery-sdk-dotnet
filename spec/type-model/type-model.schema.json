@@ -20,7 +20,7 @@
         "schemaHash": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$",
-          "description": "SHA-256 of `types` serialized compactly in the order produced, or of `{\"types\": …, \"components\": …}` when `components` is not empty (since 1.2). Equal hashes mean equal types, whichever ref they came from."
+          "description": "SHA-256 of `types` serialized compactly in the order produced, or of `{\"types\": …, \"components\": …}` when `components` is not empty (since 1.2), with `\"traits\": …` after them when the ref has traits (since 1.4). Equal hashes mean equal types, whichever ref they came from."
         }
       }
     },
@@ -34,6 +34,11 @@
       "description": "Since 1.2: component types keyed by slug, in sorted order, the types a repeater's items may be. The same shape as `types`, and never sortable. A component's slug is never also a content type's. Absent before 1.2, which a reader takes as empty.",
       "additionalProperties": { "$ref": "#/$defs/type" }
     },
+    "traits": {
+      "type": "object",
+      "description": "Since 1.4: traits keyed by slug, in sorted order: named groups of fields that types take (doc 05 §10). Each lists its fields as the trait declares them; every type that has a trait already includes those fields in its own `fields`, marked `trait`. A trait is never a type: no entry is of one, and no `of` names one. Absent when the ref has none, which a reader takes as empty.",
+      "additionalProperties": { "$ref": "#/$defs/trait" }
+    },
     "warnings": {
       "type": "array",
       "description": "Things a generator should print. Absent when there are none.",
@@ -41,6 +46,20 @@
     }
   },
   "$defs": {
+    "trait": {
+      "type": "object",
+      "required": ["slug", "name", "version", "fields"],
+      "properties": {
+        "slug": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "format": "uuid" },
+        "fields": {
+          "type": "array",
+          "description": "As the trait declares them, in its order. Fields hidden from the API are not listed.",
+          "items": { "$ref": "#/$defs/field" }
+        }
+      }
+    },
     "type": {
       "type": "object",
       "required": ["slug", "name", "version", "fields"],
@@ -56,6 +75,11 @@
         "abstract": {
           "const": true,
           "description": "Since 1.3: present, and true, when no entry is of this type itself, only its descendants'. A reference to it links to one of those."
+        },
+        "traits": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Since 1.4: every trait the type has, each a key of `traits`: its ancestors' first, then its own, each type's in the order it takes them. Absent when it has none. A generator may declare the type as having each trait's fields."
         },
         "fields": {
           "type": "array",
@@ -81,6 +105,11 @@
         "required": { "type": "boolean", "description": "Enforced when an entry is written." },
         "localized": { "type": "boolean", "description": "Delivered as one locale's value, and absent where that locale has no translation." },
         "sortable": { "type": "boolean", "description": "Accepted by delivery's `order` on a list of this type." },
+        "trait": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Since 1.4: the trait the field comes from, a key of `traits`. The field here is as this type has it, which may be tighter than the trait's own (doc 05 §10, T6)."
+        },
         "inherited": {
           "const": true,
           "description": "Since 1.3: present, and true, when the field reaches this type exactly as its parent has it: declared by an ancestor, and tightened by none of this type's overrides. A generator may then declare it on the parent alone."

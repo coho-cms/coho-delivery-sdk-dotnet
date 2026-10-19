@@ -72,14 +72,20 @@ internal static class Generator
         // Since type model 1.2. Content and component types share one slug namespace, so
         // they share one set of names too.
         var components = model.Components.Keys.Order(StringComparer.Ordinal).Select(slug => model.Components[slug]).ToList();
+        // Since type model 1.4: each trait an interface the records that take it implement.
+        var traits = model.Traits.Keys.Order(StringComparer.Ordinal).Select(slug => model.Traits[slug]).ToList();
+        var typeNames = TypeNames([.. types, .. components], warnings);
         var names = new Names(
-            TypeNames([.. types, .. components], warnings),
+            typeNames,
             components.Select(component => component.Slug).ToHashSet(StringComparer.Ordinal),
             new Hierarchy([.. types, .. components]),
-            new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal));
+            new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal),
+            InterfaceNames(traits, typeNames),
+            traits.ToDictionary(trait => trait.Slug, StringComparer.Ordinal));
         var files = new List<GeneratedFile> { ClientFile(model, @namespace, types, names, warnings) };
         files.AddRange(types.Select(type => TypeFile(type, @namespace, names, warnings, component: false)));
         files.AddRange(components.Select(component => TypeFile(component, @namespace, names, warnings, component: true)));
+        files.AddRange(traits.Select(trait => TraitFile(trait, @namespace, names)));
         SameFileCheck(files);
         return new Generated(files, warnings);
     }
@@ -92,7 +98,15 @@ internal static class Generator
     /// <param name="Components">The slugs that are component types.</param>
     /// <param name="Hierarchy">Which types extend which (type model 1.3).</param>
     /// <param name="Properties">Each type's property names by field id, its inherited fields' included, once worked out.</param>
-    private sealed record Names(Dictionary<string, string> Types, HashSet<string> Components, Hierarchy Hierarchy, Dictionary<string, Dictionary<string, string>> Properties);
+    /// <param name="Interfaces">Each trait's interface name, by slug (type model 1.4).</param>
+    /// <param name="Traits">The traits, by slug.</param>
+    private sealed record Names(
+        Dictionary<string, string> Types,
+        HashSet<string> Components,
+        Hierarchy Hierarchy,
+        Dictionary<string, Dictionary<string, string>> Properties,
+        Dictionary<string, string> Interfaces,
+        Dictionary<string, ContentType> Traits);
 
     /// <summary>
     /// Type inheritance (type model 1.3). A type that extends another derives from its
@@ -238,6 +252,155 @@ internal static class Generator
         }
     }
 
+    /* TRAITS */
+    /* TRAITS */
+    /* TRAITS */
+
+    /// <summary>
+    /// <c>seo</c> becomes <c>ISeo</c>: a trait is an interface (type model 1.4), named as C#
+    /// names one, and checked against the types' names, which share its slug namespace.
+    /// </summary>
+    private static Dictionary<string, string> InterfaceNames(List<ContentType> traits, Dictionary<string, string> types)
+    {
+        var taken = types.Values.ToHashSet(StringComparer.Ordinal);
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var trait in traits)
+        {
+            var name = $"I{Pascal(trait.Slug)}";
+            if (ReservedTypeNames.Contains(name) || !taken.Add(name))
+            {
+                throw new CodegenException($"The trait '{trait.Slug}' would be named {name}, which is taken; rename one of them");
+            }
+            names[trait.Slug] = name;
+        }
+        return names;
+    }
+
+    /// <summary>A trait's property names, by field id, by the rule a record's are given (<see cref="PropertyNames"/>).</summary>
+    private static Dictionary<string, string> TraitPropertyNames(ContentType trait, string interfaceName)
+    {
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var field in trait.Fields)
+        {
+            var name = Pascal(field.Id);
+            names[field.Id] = ReservedFieldNames.Contains(name) || name == interfaceName ? $"{name}Field" : name;
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// A trait field's type on its interface, and how a record's property becomes it when the
+    /// two differ. A choice is its value, a string, so every type's own choice struct meets it.
+    /// </summary>
+    /// <remarks><c>From</c> takes the record's property and its field, whose presence decides whether its choice may be null.</remarks>
+    private static (string Type, Func<string, Field, string>? From) InterfaceMember(ContentType trait, Field field, Names names) =>
+        field.Kind switch
+        {
+            "choice" => (field.Always ? "string" : "string?", (property, own) => own.Always ? $"{property}.Value" : $"{property}?.Value"),
+            "multichoice" => ("IReadOnlyList<string>", (property, _) => $"[.. {property}.Select(static each => each.Value)]"),
+            _ => (FieldShape(trait, field, "entry", names, []).Type, null),
+        };
+
+    /// <summary>
+    /// <c>ISeo.cs</c>: the fields a trait declares, as get-only properties, which every record
+    /// that takes it implements. Code written against the interface accepts any of them.
+    /// </summary>
+    private static GeneratedFile TraitFile(ContentType trait, string @namespace, Names names)
+    {
+        var name = names.Interfaces[trait.Slug];
+        var properties = TraitPropertyNames(trait, name);
+        var o = new Lines();
+        o.Add(Header);
+        o.Add();
+        o.Add("#nullable enable");
+        o.Add();
+        o.Add("using System;");
+        o.Add("using System.Collections.Generic;");
+        o.Add("using System.Text.Json;");
+        o.Add("using CohoCms.Delivery;");
+        o.Add();
+        o.Add($"namespace {@namespace};");
+        o.Add();
+        o.Add(Summary(trait.Name, "A trait: fields every type with it has. Take it to accept an entry of any of them."));
+        o.Add($"public interface {name}");
+        o.Add("{");
+        foreach (var (field, i) in trait.Fields.Select((field, i) => (field, i)))
+        {
+            if (i > 0)
+            {
+                o.Add();
+            }
+            var (type, _) = InterfaceMember(trait, field, names);
+            o.Add(1, Summary(field.Name, Note(field, FieldShape(trait, field, "entry", names, []), names)));
+            o.Add(1, $"{type} {properties[field.Id]} {{ get; }}");
+        }
+        o.Add("}");
+        return new GeneratedFile($"{name}.cs", o.ToString());
+    }
+
+    /// <param name="Interface">The trait's interface name, <c>ISeo</c>.</param>
+    /// <param name="Explicit">The members the record implements explicitly: those whose type or name differs from the trait's.</param>
+    private sealed record Implemented(string Interface, List<string> Explicit);
+
+    /// <summary>
+    /// The traits [type]'s record implements: those it takes itself, since a parent's record
+    /// implements the parent's. A field the type has as the trait does is implemented by its
+    /// property; one it tightened, a choice, or one named otherwise, explicitly. One it narrowed
+    /// past converting (fewer link targets) leaves the trait unimplemented, with a warning.
+    /// </summary>
+    private static List<Implemented> Implements(ContentType type, ContentType? parent, Names names, Dictionary<string, string> properties, string variable, List<string> warnings)
+    {
+        var implemented = new List<Implemented>();
+        foreach (var slug in type.Traits.Except(parent?.Traits ?? [], StringComparer.Ordinal))
+        {
+            if (!names.Traits.TryGetValue(slug, out var trait))
+            {
+                continue;
+            }
+            var name = names.Interfaces[slug];
+            var traitProperties = TraitPropertyNames(trait, name);
+            var explicitly = new List<string>();
+            string? cannot = null;
+            foreach (var field in trait.Fields)
+            {
+                var own = type.Fields.FirstOrDefault(each => each.Id == field.Id);
+                if (own is null)
+                {
+                    cannot = field.Id;
+                    break;
+                }
+                var (interfaceType, from) = InterfaceMember(trait, field, names);
+                var recordType = FieldShape(type, own, variable, names, []).Type;
+                var property = properties[field.Id];
+                var member = $"{interfaceType} {name}.{traitProperties[field.Id]} => ";
+                if (from is not null)
+                {
+                    explicitly.Add(member + from(property, own) + ";");
+                }
+                else if (recordType == interfaceType && property == traitProperties[field.Id])
+                {
+                    continue;
+                }
+                else if (recordType == interfaceType || $"{recordType}?" == interfaceType)
+                {
+                    explicitly.Add(member + property + ";");
+                }
+                else
+                {
+                    cannot = field.Id;
+                    break;
+                }
+            }
+            if (cannot is not null)
+            {
+                warnings.Add($"{type.Slug} does not implement {name}: its {cannot} is narrower than the trait's in a way C# cannot convert.");
+                continue;
+            }
+            implemented.Add(new Implemented(name, explicitly));
+        }
+        return implemented;
+    }
+
     /* CONTENT TYPES */
     /* CONTENT TYPES */
     /* CONTENT TYPES */
@@ -278,6 +441,11 @@ internal static class Generator
         {
             notes.Add($"Abstract: {(component ? "an item" : "an entry")} is one of the types that extend it.");
         }
+        var implemented = Implements(type, parent, names, properties, variable, warnings);
+        if (implemented.Count > 0)
+        {
+            notes.Add($"Has the trait{(implemented.Count == 1 ? "" : "s")} {All([.. implemented.Select(each => each.Interface)])}.");
+        }
 
         var o = new Lines();
         o.Add(Header);
@@ -294,7 +462,7 @@ internal static class Generator
         o.Add($"namespace {@namespace};");
         o.Add();
         o.Add(Summary(type.Name, string.Join(' ', notes)));
-        o.Add($"public {modifier}record {name} : {(parent is null ? @base : names.Types[parent.Slug])}");
+        o.Add($"public {modifier}record {name} : {string.Join(", ", [parent is null ? @base : names.Types[parent.Slug], .. implemented.Select(each => each.Interface)])}");
         o.Add("{");
         o.Add(1, $"{(type.Abstract ? "protected" : "public")} {name}()");
         o.Add(1, "{");
@@ -315,6 +483,13 @@ internal static class Generator
             o.Add();
             o.Add(1, Summary(field.Name, Note(field, shape, names)));
             o.Add(1, $"public {shape.Type} {property} {{ get; init; }}{shape.Initializer}");
+        }
+
+        // A trait's field the record has otherwise than the trait does, as the trait has it.
+        foreach (var member in implemented.SelectMany(each => each.Explicit))
+        {
+            o.Add();
+            o.Add(1, member);
         }
 
         foreach (var (field, property, _) in fields.Where(each => IsChoice(each.Field)))
