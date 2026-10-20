@@ -6,8 +6,8 @@ It belongs in your content library, the project your sites and services referenc
 
 ```bash
 dotnet new tool-manifest
-dotnet tool install CohoCms.Codegen --prerelease
-dotnet add package CohoCms.Delivery --prerelease
+dotnet tool install CohoCms.Codegen
+dotnet add package CohoCms.Delivery
 ```
 
 ## Commands

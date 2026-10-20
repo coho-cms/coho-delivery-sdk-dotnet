@@ -5,7 +5,7 @@ The Coho CMS delivery client, and the runtime your generated content library cal
 Most projects don't reference this directly. They reference their own content library, generated from their content types, which depends on this package and gives every content type its own typed reads. Use this package directly for untyped access, or for anything the generated reads don't cover.
 
 ```bash
-dotnet add package CohoCms.Delivery --prerelease
+dotnet add package CohoCms.Delivery
 ```
 
 ## Untyped reads
