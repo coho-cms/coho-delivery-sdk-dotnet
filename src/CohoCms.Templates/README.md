@@ -3,7 +3,7 @@
 `dotnet new coho-library`: creates your content library for Coho CMS, a .NET library generated from your project's content types, that your sites and services reference.
 
 ```bash
-dotnet new install CohoCms.Templates::0.1.0-alpha.3
+dotnet new install CohoCms.Templates@0.1.0-alpha.3
 dotnet new coho-library -n Acme.Content
 cd Acme.Content
 dotnet tool restore
