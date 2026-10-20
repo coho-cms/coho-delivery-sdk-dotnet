@@ -1,20 +1,18 @@
 name: Publish
 
 # Publishes CohoCms.Delivery, CohoCms.Codegen and CohoCms.Templates to nuget.org, together
-# and at one version: the template pins the libraries it creates to that version, and is
-# bundled from the coho-template-dotnet ref named here. Bump the version in
-# Directory.Build.props, merge, tag the template, then run this by hand. A version cannot be
-# published twice, so every fix is a new version.
+# and at one version, when a release tag is pushed: release-v2026.1.0 publishes 2026.1.0,
+# release-v2026.2.0-alpha.1 the prerelease 2026.2.0-alpha.1. The template pins the
+# libraries it creates to that version, and is bundled from coho-template-dotnet at the
+# tag of the same name, so tag the template first. A version cannot be published twice,
+# so every fix is a new version. To try again after a failure, re-run this workflow's run.
 #
 # Trusted Publishing: nuget.org trusts this workflow file in this repository, by a policy
 # the CohoCMS organisation holds, and gives it a key for an hour. No key is stored here.
 # NUGET_USER is the nuget.org user the policy was created by.
 on:
-  workflow_dispatch:
-    inputs:
-      template-ref:
-        description: The coho-template-dotnet tag or branch to bundle into CohoCms.Templates
-        required: true
+  push:
+    tags: ['release-v*']
 
 permissions:
   contents: read
@@ -26,11 +24,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Check out the template to bundle
+      # The tag less its release-v, checked to be a version NuGet takes. Directory.Build.props
+      # is only the version local builds carry, so a difference is a warning, not a failure.
+      - name: The version, from the tag
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#release-v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$GITHUB_REF_NAME does not name a version: release tags are release-v2026.1.0, or release-v2026.2.0-alpha.1"
+            exit 1
+          fi
+          local=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          if [[ "$local" != "$version" ]]; then
+            echo "::warning::Directory.Build.props says $local; publishing $version, from the tag"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Check out the template to bundle, at the same tag
         uses: actions/checkout@v5
         with:
           repository: coho-cms/coho-template-dotnet
-          ref: ${{ inputs.template-ref }}
+          ref: refs/tags/${{ github.ref_name }}
           path: template-checkout
       - uses: actions/setup-dotnet@v5
         with:
@@ -38,20 +51,28 @@ jobs:
             8.0.x
             10.0.x
       - run: dotnet restore
-      - run: dotnet build --no-restore -c Release
+      - run: dotnet build --no-restore -c Release -p:Version="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
       - name: Test
         run: dotnet test --no-build -c Release
         env:
           DOTNET_ROLL_FORWARD: LatestPatch
       - name: Bundle the template into CohoCms.Templates
-        run: dotnet run scripts/bundle-template.cs -- "$GITHUB_WORKSPACE/template-checkout"
-      - run: dotnet pack -c Release -o artifacts
+        run: dotnet run scripts/bundle-template.cs -- "$GITHUB_WORKSPACE/template-checkout" "$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+      - run: dotnet pack -c Release -p:Version="$VERSION" -o artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
       # CohoCms.Templates packs nothing without a bundled template, so its absence would not fail the pack.
-      - name: Every package is there
+      - name: Every package is there, at the tag's version
         run: |
           for package in CohoCms.Delivery CohoCms.Codegen CohoCms.Templates; do
-            ls artifacts/"$package".*.nupkg
+            ls artifacts/"$package"."$VERSION".nupkg
           done
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
       - name: Sign in to nuget.org
         id: login
         uses: NuGet/login@v1

@@ -32,9 +32,11 @@ The three packages are published to nuget.org together, at one version: `CohoCms
 
 Versions are year.release, as Coho's branches and every Coho SDK are: `2026.1.0` is the release developed on `v2026.1.0`, a fix to it is `2026.1.1`, and a prerelease of the next is `2026.2.0-alpha.1`, with the hyphen NuGet needs. A library's reference to `CohoCms.Delivery` is a minimum, so a fix reaches an app that asks for it, and a change that breaks a generated library or the runtime's API waits for the next year.release.
 
-1. Bump `<Version>` in `Directory.Build.props`, such as to `2026.1.1`, and merge.
-2. Tag [coho-template-dotnet](https://github.com/coho-cms/coho-template-dotnet) at the commit to ship.
-3. Run the **Publish** workflow, naming that tag. It tests, bundles the template into `CohoCms.Templates`, and publishes all three.
+A release is a tag, `release-v` and the version: `release-v2026.1.1`, or `release-v2026.2.0-alpha.1` for a prerelease. Pushing it publishes.
+
+1. Bump `<Version>` in `Directory.Build.props`, such as to `2026.1.1`, and merge, so local builds carry it too.
+2. Tag [coho-template-dotnet](https://github.com/coho-cms/coho-template-dotnet) at the commit to ship, `release-v2026.1.1`, and push the tag.
+3. Tag this repository `release-v2026.1.1`, and push the tag. That runs the **Publish** workflow, which takes the version from the tag, less `release-v`, tests, bundles the template from its tag of the same name into `CohoCms.Templates`, and publishes all three.
 
 A version cannot be published twice. The workflow signs in to nuget.org with Trusted Publishing: a policy on nuget.org, held by the `CohoCMS` organisation, trusts `publish.yml` in this repository, and the workflow needs only `NUGET_USER`, the nuget.org user who created the policy. No API key is stored.
 

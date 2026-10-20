@@ -1,5 +1,7 @@
-// `dotnet run scripts/bundle-template.cs -- <template checkout>`: bundles a checkout of
-// coho-template-dotnet into CohoCms.Templates, as the Publish workflow does before it packs.
+// `dotnet run scripts/bundle-template.cs -- <template checkout> [version]`: bundles a checkout
+// of coho-template-dotnet into CohoCms.Templates, as the Publish workflow does before it packs.
+// The version is the one being released, which the Publish workflow takes from its tag; left
+// out, it is Directory.Build.props's.
 //
 // What must not travel is left behind: a checkout's history, what building leaves, and above
 // all a developer's own .env, which holds their token. The library is pinned to this SDK's
@@ -9,16 +11,18 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-if (args.Length != 1 || !File.Exists(Path.Combine(args[0], ".template.config", "template.json")))
+if (args.Length is not (1 or 2) || !File.Exists(Path.Combine(args[0], ".template.config", "template.json")))
 {
-    Console.Error.WriteLine("Usage: dotnet run scripts/bundle-template.cs -- <template folder>, a checkout of coho-template-dotnet");
+    Console.Error.WriteLine("Usage: dotnet run scripts/bundle-template.cs -- <template folder> [version], a checkout of coho-template-dotnet");
     return 1;
 }
 
 var root = Path.GetFullPath(Path.Combine(AppContext.GetData("EntryPointFileDirectoryPath") as string ?? "scripts", ".."));
 var from = Path.GetFullPath(args[0]);
 var to = Path.Combine(root, "src", "CohoCms.Templates", "content", "coho-library");
-var version = Regex.Match(File.ReadAllText(Path.Combine(root, "Directory.Build.props")), "<Version>([^<]+)</Version>").Groups[1].Value;
+var version = args.Length == 2
+    ? args[1]
+    : Regex.Match(File.ReadAllText(Path.Combine(root, "Directory.Build.props")), "<Version>([^<]+)</Version>").Groups[1].Value;
 if (version == "")
 {
     Console.Error.WriteLine("Directory.Build.props names no <Version>");
