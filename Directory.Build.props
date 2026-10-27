@@ -16,7 +16,7 @@
     version: the template pins the libraries it creates to it.
   -->
   <PropertyGroup>
-    <Version>2026.1.0</Version>
+    <Version>2026.2.0-alpha.1</Version>
     <Authors>Coho CMS</Authors>
     <Company>Coho CMS</Company>
     <Copyright>Copyright Coho CMS</Copyright>
