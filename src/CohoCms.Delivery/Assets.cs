@@ -128,7 +128,6 @@ public sealed record Asset
         Add("fit", options.Fit?.ToString().ToLowerInvariant());
         Add("fm", options.Format?.ToString().ToLowerInvariant());
         Add("q", options.Quality);
-        Add("bg", options.Background);
         // The edge cannot look the focal point up, so a crop is told where to centre.
         if (FocalPoint is { } focal && options.Fit is ImageFit.Fill or ImageFit.Crop or ImageFit.Thumb)
         {
@@ -220,8 +219,10 @@ public sealed record ImageOptions
     /// <summary>1 to 100. The edge rounds to a multiple of 5; its default is 75.</summary>
     public int? Quality { get; init; }
 
-    /// <summary>The colour around a <see cref="ImageFit.Pad"/>, as <c>rrggbb</c>.</summary>
-    public string? Background { get; init; }
+    // ⚠️ There is no Background. A Pad is filled, and a jpg flattened, with a colour the
+    // deployment sets rather than one a URL carries. It used to be `bg` here: six hex digits,
+    // so about seventeen million cache keys for one image and as many transforms, which anyone
+    // could walk. Adding it back means adding that back.
 }
 
 public enum ImageFit
