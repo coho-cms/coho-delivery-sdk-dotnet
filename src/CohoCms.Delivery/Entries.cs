@@ -235,8 +235,8 @@ public enum IssueKind
     UnlistedLink,
 
     /// <summary>
-    /// A repeater item of a component the code has no type for, left out of the list. The
-    /// code was generated before that component was added to the field.
+    /// A repeater item of a component the code has no type for, left out of the list, at
+    /// whatever level it is. The code was generated before that component was added to the field.
     /// </summary>
     UnknownItem,
 }

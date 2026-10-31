@@ -267,6 +267,12 @@ public abstract class FieldReader
     /// before that component was added to the field, and an item is never typed as something
     /// it is not.
     /// </summary>
+    /// <remarks>
+    /// Items hold items (type model 1.6): a component's record reads its own repeaters through
+    /// its <see cref="ItemReader"/>, so this filters at every level, and recurses only as deep
+    /// as the items delivery sent. An issue names the nested field's path, such as
+    /// <c>sections/0/points/0/children</c>.
+    /// </remarks>
     public IReadOnlyList<T>? Items<T>(string field, Func<ItemReader, T?> read)
         where T : ItemBase
     {
@@ -387,7 +393,8 @@ public sealed class EntryReader : FieldReader
 
 /// <summary>
 /// One repeater item's values, read for the record of its component type. Its fields are
-/// read as an entry's are; <see cref="Id"/> and <see cref="Type"/> are its system keys.
+/// read as an entry's are, its own repeaters' items included; <see cref="Id"/> and
+/// <see cref="Type"/> are its system keys.
 /// </summary>
 public sealed class ItemReader : FieldReader
 {

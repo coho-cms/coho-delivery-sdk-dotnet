@@ -239,6 +239,51 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void A_components_repeater_is_typed_as_a_content_types_is_and_may_hold_itself()
+    {
+        // Since type model 1.6: menuItem holds itself, and through group, itself again.
+        var generated = Generator.Generate(
+            ModelOf(
+                new() { ["navigation"] = [F("links", "repeater", of: ["menuItem"])] },
+                components: new()
+                {
+                    ["menuItem"] = [F("label"), F("children", "repeater", of: ["menuItem"]), F("extras", "repeater", of: ["group", "menuItem"])],
+                    ["group"] = [F("items", "repeater", of: ["menuItem"])],
+                }),
+            "N");
+        var menuItem = Contents(generated, "MenuItem.cs");
+
+        Assert.Contains("public IReadOnlyList<MenuItem> Children { get; init; } = [];", menuItem, StringComparison.Ordinal);
+        Assert.Contains(
+            "Children = item.Items<MenuItem>(\"children\", static each => each.Type switch { \"menuItem\" => new MenuItem(each), _ => null }) ?? [];",
+            menuItem,
+            StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<ItemBase> Extras { get; init; } = [];", menuItem, StringComparison.Ordinal);
+        Assert.Contains(
+            "Extras = item.Items<ItemBase>(\"extras\", static each => each.Type switch { \"group\" => new Group(each), \"menuItem\" => new MenuItem(each), _ => null }) ?? [];",
+            menuItem,
+            StringComparison.Ordinal);
+        Assert.Contains("/// <summary>extras. Each item is Group or MenuItem: match on its type.</summary>", menuItem, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<MenuItem> Items { get; init; } = [];", Contents(generated, "Group.cs"), StringComparison.Ordinal);
+        Assert.Empty(generated.Warnings);
+    }
+
+    [Fact]
+    public void Nested_records_are_built_as_deep_as_the_data_goes()
+    {
+        var menu = new Golden.Nested.MenuItem
+        {
+            Id = "a",
+            Type = "menuItem",
+            Children = [new Golden.Nested.MenuItem { Id = "b", Type = "menuItem", Children = [new Golden.Nested.MenuItem { Id = "c", Type = "menuItem" }] }],
+        };
+
+        // The golden compiles, so the recursive record is valid C#; a leaf's children are empty, never null.
+        Assert.Equal("c", menu.Children[0].Children[0].Id);
+        Assert.Empty(menu.Children[0].Children[0].Children);
+    }
+
+    [Fact]
     public void A_component_cannot_share_a_name_with_a_content_type()
     {
         var refused = Assert.Throws<CodegenException>(() => Generator.Generate(ModelOf(new() { ["quote"] = [] }, components: new() { ["quote"] = [] }), "N"));

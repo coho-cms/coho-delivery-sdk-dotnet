@@ -16,6 +16,7 @@ internal static class Fixtures
         ["inheritance"] = "Golden.Inheritance",
         ["traits"] = "Golden.Traits",
         ["lists"] = "Golden.Lists",
+        ["nested"] = "Golden.Nested",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");

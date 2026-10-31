@@ -623,6 +623,8 @@ internal static class Generator
                 // wrong about what it holds. Several components are an ItemBase each, narrowed
                 // by pattern matching, as a link with several targets is an EntryBase.
                 // A base component's item is any concrete component in its family (type model 1.3).
+                // A component's repeater is read the same way from its item (type model 1.6), so
+                // items are filtered at every level, and one that holds itself is a recursive record.
                 var components = field.Of.Where(names.Components.Contains).ToList();
                 if (components.Count == 0)
                 {

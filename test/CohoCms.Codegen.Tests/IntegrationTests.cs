@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CohoCms.Delivery;
 using CohoCms.Delivery.Tests;
 using Golden.DeliveryFixture;
@@ -13,6 +14,8 @@ namespace CohoCms.Codegen.Tests;
 /// </summary>
 public sealed class IntegrationTests
 {
+    private const string OutlineId = "00000000-0000-7000-8000-0000000000b1";
+
     private static readonly CancellationToken None = TestContext.Current.CancellationToken;
 
     /// <summary>A client over the recordings, in <paramref name="locale"/>.</summary>
@@ -100,6 +103,47 @@ public sealed class IntegrationTests
 
         Assert.Null(figure.Keywords);
         Assert.Empty(figure.Sizes);
+    }
+
+    [Fact]
+    public async Task Items_inside_items_are_read_as_the_generated_records_at_every_level()
+    {
+        var outline = await Client().Outline.ByIdAsync(OutlineId, cancellationToken: None);
+
+        var section = Assert.Single(outline!.Sections);
+        Assert.Equal(("00000000-0000-7000-8000-0000000000b2", "outlineSection", "Plan"), (section.Id, section.Type, section.Heading));
+        var first = Assert.Single(section.Points);
+        var second = Assert.Single(first.Children);
+        var third = Assert.Single(second.Children);
+        Assert.Equal(["00000000-0000-7000-8000-0000000000b3", "00000000-0000-7000-8000-0000000000b4", "00000000-0000-7000-8000-0000000000b5"], new[] { first, second, third }.Select(point => point.Id));
+        Assert.All(new[] { first, second, third }, point => Assert.Equal("point", point.Type));
+        Assert.Equal(["Survey", "Measure", null], new[] { first, second, third }.Select(point => point.Text));
+        // The third point is text only in pt-BR, so en-US leaves it out; it holds no points.
+        Assert.Empty(third.Children);
+        // notes is localized as a whole: the en-US list.
+        var note = Assert.Single(section.Notes);
+        Assert.Equal(("00000000-0000-7000-8000-0000000000b6", "note", "Bring cones"), (note.Id, note.Type, note.Text));
+    }
+
+    [Fact]
+    public void A_nested_item_of_a_component_the_code_has_no_type_for_is_left_out_and_reported_where_it_is()
+    {
+        var body = Spec.Body("entry-with-nested-items").DeepClone();
+        var sent = body["entries"]![OutlineId]!["fields"]!["sections"]![0]!["points"]!;
+        sent[0]!["children"]!.AsArray().Add(new JsonObject { ["_id"] = "x1", ["_type"] = "video" });
+        sent.AsArray().Add(new JsonObject { ["_id"] = "x2", ["_type"] = "point", ["text"] = "Mark" });
+
+        var issues = new List<Issue>();
+        var outline = Assert.IsType<Outline>(Assert.Single(Hydrator.Hydrate(body.Deserialize(DeliveryJson.Default.EntryList)!, Coho.Shape, issues.Add)));
+
+        var points = outline.Sections[0].Points;
+        Assert.Equal(["Survey", "Mark"], points.Select(point => point.Text));
+        // The video is left out beside the point it was added after, which survives.
+        Assert.Equal(["00000000-0000-7000-8000-0000000000b4"], points[0].Children.Select(point => point.Id));
+        Assert.Equal("Measure", points[0].Children[0].Text);
+        var issue = Assert.Single(issues);
+        Assert.Equal((IssueKind.UnknownItem, "sections/0/points/0/children"), (issue.Kind, issue.Field));
+        Assert.Contains("an item of 'video'", issue.Message, StringComparison.Ordinal);
     }
 
     public static TheoryData<string> Answers => new(Spec.All().Where(each => each.Status == 200).Select(each => each.Name).Order(StringComparer.Ordinal));
