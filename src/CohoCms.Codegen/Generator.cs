@@ -633,6 +633,28 @@ internal static class Generator
                 var read = $"static each => each.Type switch {{ {string.Concat(arms)}_ => null }}";
                 return new Shape($"IReadOnlyList<{item}>", $"{entry}.Items<{item}>({id}, {read}) ?? []", " = [];", List: true);
             }
+            case "list":
+            {
+                // Plain values, never links (type model 1.5). A localized list is null where
+                // absent, so an untranslated locale never reads as a locale's empty array, a
+                // value; any other is empty where absent, as every list is.
+                var (clr, read) = field.Item switch
+                {
+                    "text" => ("string", "Texts"),
+                    "integer" => ("long", "Integers"),
+                    "number" => ("double", "Numbers"),
+                    "datetime" => ("DateTimeOffset", "DateTimes"),
+                    _ => default,
+                };
+                if (clr is null)
+                {
+                    warnings.Add($"{type.Slug}.{field.Id} is a list of '{field.Item}', which this generator does not know; it is read as JSON. Upgrade CohoCms.Codegen.");
+                    return new Shape("JsonElement?", $"{entry}.Json({id})");
+                }
+                return field.Localized && !field.Always
+                    ? new Shape($"IReadOnlyList<{clr}>?", $"{entry}.{read}({id})")
+                    : new Shape($"IReadOnlyList<{clr}>", $"{entry}.{read}({id}) ?? []", " = [];", List: true);
+            }
             default:
                 warnings.Add($"{type.Slug}.{field.Id} is a '{field.Kind}', which this generator does not know; it is read as JSON. Upgrade CohoCms.Codegen.");
                 return new Shape("JsonElement?", $"{entry}.Json({id})");
@@ -669,7 +691,10 @@ internal static class Generator
         }
         if (field.Localized)
         {
-            notes.Add(shape.List ? "Empty where the locale has no translation." : "Null where the locale has no translation.");
+            // A localized list's empty array is a value, none in that locale, unlike an untranslated one.
+            notes.Add(field.Kind == "list" && !shape.List
+                ? "Null where the locale has no translation, and empty where it has none."
+                : shape.List ? "Empty where the locale has no translation." : "Null where the locale has no translation.");
         }
         return string.Join(' ', notes);
     }

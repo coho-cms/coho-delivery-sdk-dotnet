@@ -15,6 +15,7 @@ internal static class Fixtures
         ["repeaters"] = "Golden.Repeaters",
         ["inheritance"] = "Golden.Inheritance",
         ["traits"] = "Golden.Traits",
+        ["lists"] = "Golden.Lists",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");
@@ -110,9 +111,23 @@ internal static class Fixtures
         return filled;
     }
 
-    public static JsonObject F(string id, string kind = "text", bool many = false, string[]? of = null, string? name = null, string[]? values = null, bool sortable = false, string presence = "maybe")
+    public static JsonObject F(
+        string id,
+        string kind = "text",
+        bool many = false,
+        string[]? of = null,
+        string? name = null,
+        string[]? values = null,
+        bool sortable = false,
+        string presence = "maybe",
+        string? item = null,
+        bool localized = false)
     {
-        var field = new JsonObject { ["id"] = id, ["kind"] = kind, ["many"] = many, ["sortable"] = sortable, ["presence"] = presence };
+        var field = new JsonObject { ["id"] = id, ["kind"] = kind, ["many"] = many, ["sortable"] = sortable, ["presence"] = presence, ["localized"] = localized };
+        if (item is not null)
+        {
+            field["item"] = item;
+        }
         if (of is not null)
         {
             field["of"] = new JsonArray(of.Select(slug => (JsonNode?)slug).ToArray());

@@ -145,12 +145,18 @@ public abstract class FieldReader
     /// <summary>Text, long text, or a choice.</summary>
     public string? Text(string field) => Value(field, "text", JsonValueKind.String, value => value.GetString());
 
-    /// <summary>A multichoice's values.</summary>
+    /// <summary>A multichoice's values, or a list of text.</summary>
     public IReadOnlyList<string>? Texts(string field) => Array(field, "text", JsonValueKind.String, value => value.GetString()!);
 
     public long? Integer(string field) => Value(field, "an integer", JsonValueKind.Number, value => value.TryGetInt64(out var number) ? number : (long?)null);
 
+    /// <summary>A list of integers.</summary>
+    public IReadOnlyList<long>? Integers(string field) => Parsed(field, "integers", JsonValueKind.Number, value => (value.TryGetInt64(out var number), number));
+
     public double? Number(string field) => Value(field, "a number", JsonValueKind.Number, value => value.GetDouble());
+
+    /// <summary>A list of numbers.</summary>
+    public IReadOnlyList<double>? Numbers(string field) => Array(field, "numbers", JsonValueKind.Number, value => value.GetDouble());
 
     public bool? Boolean(string field)
     {
@@ -173,6 +179,16 @@ public abstract class FieldReader
             "an ISO 8601 date and time",
             JsonValueKind.String,
             value => DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var time) ? time : (DateTimeOffset?)null);
+    }
+
+    /// <summary>A list of ISO 8601 dates and times.</summary>
+    public IReadOnlyList<DateTimeOffset>? DateTimes(string field)
+    {
+        return Parsed(
+            field,
+            "ISO 8601 dates and times",
+            JsonValueKind.String,
+            value => (DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var time), time));
     }
 
     /// <summary>Any value, as delivery sent it: a json field, or a kind this code does not know.</summary>
@@ -298,7 +314,11 @@ public abstract class FieldReader
         return Unexpected<T>(field, value, expected);
     }
 
-    private List<T>? Array<T>(string field, string expected, JsonValueKind kind, Func<JsonElement, T> read)
+    private List<T>? Array<T>(string field, string expected, JsonValueKind kind, Func<JsonElement, T> read) =>
+        Parsed(field, expected, kind, value => (true, read(value)));
+
+    /// <summary>A list whose <paramref name="read"/> can refuse a value of the right JSON kind, such as a number that is not an integer, which is reported and left out.</summary>
+    private List<T>? Parsed<T>(string field, string expected, JsonValueKind kind, Func<JsonElement, (bool Read, T Value)> read)
     {
         if (!Fields.TryGetValue(field, out var value) || value.ValueKind == JsonValueKind.Null)
         {
@@ -311,9 +331,9 @@ public abstract class FieldReader
         var items = new List<T>(value.GetArrayLength());
         foreach (var item in value.EnumerateArray())
         {
-            if (item.ValueKind == kind)
+            if (item.ValueKind == kind && read(item) is (true, var each))
             {
-                items.Add(read(item));
+                items.Add(each);
             }
             else
             {

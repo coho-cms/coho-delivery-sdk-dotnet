@@ -87,6 +87,9 @@ internal sealed record Field
 
     public List<string> Values { get; set; } = [];
 
+    /// <summary>On lists (since 1.5): the kind of every value, <c>text</c>, <c>integer</c>, <c>number</c>, or <c>datetime</c>.</summary>
+    public string? Item { get; set; }
+
     /// <summary>On assets (IR 1.1): the media types a linked file may be, or family wildcards. Empty for any.</summary>
     public List<string> Accept { get; set; } = [];
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CohoCms.Delivery;
 using CohoCms.Delivery.Tests;
 using Golden.DeliveryFixture;
@@ -71,6 +72,49 @@ public sealed class IntegrationTests
         Assert.Equal(["ASCE", "Rodegerdts, L., et al."], figure!.Sources.Select(citation => citation.Authors));
         Assert.Equal(2010L, figure.Sources[1].Year);
         Assert.IsType<Citation>(figure.Sources[0]);
+    }
+
+    [Fact]
+    public async Task Lists_and_localized_item_fields_are_read_in_the_requested_locale()
+    {
+        var figure = await Client(locale: "de-DE").Figure.ByIdAsync("00000000-0000-7000-8000-0000000000f3", cancellationToken: None);
+
+        Assert.Equal([3L, 5L], figure!.Sizes);
+        // German has none on purpose: an empty list, as delivery sent it, not null.
+        Assert.NotNull(figure.Keywords);
+        Assert.Empty(figure.Keywords);
+        Assert.Equal(["Messen", null], figure.Steps.Select(step => step.Label));
+        Assert.Equal([5L, 2L], figure.Steps.Select(step => step.Minutes));
+    }
+
+    [Fact]
+    public void A_localized_list_the_locale_has_no_translation_of_is_null_and_an_unlocalized_one_empty()
+    {
+        // figure-3 as a locale with no keywords would be sent: without the field.
+        var body = Spec.Body("entry-with-localized-items").DeepClone();
+        var fields = body["entries"]!["00000000-0000-7000-8000-0000000000f3"]!["fields"]!.AsObject();
+        fields.Remove("keywords");
+        fields.Remove("sizes");
+
+        var figure = Assert.IsType<Figure>(Assert.Single(Hydrator.Hydrate(body.Deserialize(DeliveryJson.Default.EntryList)!, Coho.Shape)));
+
+        Assert.Null(figure.Keywords);
+        Assert.Empty(figure.Sizes);
+    }
+
+    public static TheoryData<string> Answers => new(Spec.All().Where(each => each.Status == 200).Select(each => each.Name).Order(StringComparer.Ordinal));
+
+    [Theory]
+    [MemberData(nameof(Answers))]
+    public void Every_recorded_answer_hydrates_through_the_generated_shape_without_an_issue(string name)
+    {
+        var issues = new List<Issue>();
+
+        var roots = Hydrator.Hydrate(Spec.Graph(name), Coho.Shape, issues.Add);
+
+        Assert.Empty(issues);
+        // Every type the recordings hold is in the delivery fixture, so each entry is its record.
+        Assert.All(roots, root => Assert.IsNotType<HydratedEntry>(root));
     }
 
     [Fact]

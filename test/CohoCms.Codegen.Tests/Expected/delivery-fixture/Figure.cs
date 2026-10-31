@@ -29,6 +29,9 @@ public sealed record Figure : EntryBase
         Poster = entry.Asset("poster");
         Gallery = entry.Assets("gallery") ?? [];
         Sources = entry.Items<Citation>("sources", static each => each.Type switch { "citation" => new Citation(each), _ => null }) ?? [];
+        Steps = entry.Items<Step>("steps", static each => each.Type switch { "step" => new Step(each), _ => null }) ?? [];
+        Keywords = entry.Texts("keywords");
+        Sizes = entry.Integers("sizes") ?? [];
     }
 
     /// <summary>caption</summary>
@@ -45,4 +48,13 @@ public sealed record Figure : EntryBase
 
     /// <summary>sources</summary>
     public IReadOnlyList<Citation> Sources { get; init; } = [];
+
+    /// <summary>steps</summary>
+    public IReadOnlyList<Step> Steps { get; init; } = [];
+
+    /// <summary>keywords. Null where the locale has no translation, and empty where it has none.</summary>
+    public IReadOnlyList<string>? Keywords { get; init; }
+
+    /// <summary>sizes</summary>
+    public IReadOnlyList<long> Sizes { get; init; } = [];
 }

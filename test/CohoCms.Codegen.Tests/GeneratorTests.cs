@@ -122,6 +122,71 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void A_list_is_a_list_of_its_items_kind_and_a_localized_one_is_null_where_untranslated()
+    {
+        var generated = Generator.Generate(ModelOf(new()
+        {
+            ["event"] =
+            [
+                F("keywords", "list", item: "text", localized: true),
+                F("sizes", "list", item: "integer"),
+                F("scores", "list", item: "number"),
+                F("sessions", "list", item: "datetime", presence: "always"),
+            ],
+        }), "N");
+        var @event = Contents(generated, "Event.cs");
+
+        // A localized list's empty array is a value, none in that locale, so an untranslated one is null.
+        Assert.Contains("public IReadOnlyList<string>? Keywords { get; init; }\n", @event, StringComparison.Ordinal);
+        Assert.Contains("Keywords = entry.Texts(\"keywords\");", @event, StringComparison.Ordinal);
+        Assert.Contains("/// <summary>keywords. Null where the locale has no translation, and empty where it has none.</summary>", @event, StringComparison.Ordinal);
+        // Any other list is empty where it is absent.
+        Assert.Contains("public IReadOnlyList<long> Sizes { get; init; } = [];", @event, StringComparison.Ordinal);
+        Assert.Contains("Sizes = entry.Integers(\"sizes\") ?? [];", @event, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<double> Scores { get; init; } = [];", @event, StringComparison.Ordinal);
+        Assert.Contains("Scores = entry.Numbers(\"scores\") ?? [];", @event, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<DateTimeOffset> Sessions { get; init; } = [];", @event, StringComparison.Ordinal);
+        Assert.Contains("Sessions = entry.DateTimes(\"sessions\") ?? [];", @event, StringComparison.Ordinal);
+        Assert.Contains("/// <summary>sizes</summary>", @event, StringComparison.Ordinal);
+        Assert.Empty(generated.Warnings);
+
+        // Plain values: never followed as links.
+        var client = Contents(generated, "Coho.cs");
+        Assert.DoesNotContain("Links =", client, StringComparison.Ordinal);
+        Assert.Contains("Always = [\"sessions\"],", client, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_list_in_a_component_is_read_from_its_item()
+    {
+        var generated = Generator.Generate(
+            ModelOf(
+                new() { ["event"] = [F("agenda", "repeater", of: ["talk"])] },
+                components: new() { ["talk"] = [F("speakers", "list", item: "text"), F("tracks", "list", item: "integer", localized: true), F("title", localized: true)] }),
+            "N");
+        var talk = Contents(generated, "Talk.cs");
+
+        Assert.Contains("public sealed record Talk : ItemBase\n{", talk, StringComparison.Ordinal);
+        Assert.Contains("Speakers = item.Texts(\"speakers\") ?? [];", talk, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<string> Speakers { get; init; } = [];", talk, StringComparison.Ordinal);
+        Assert.Contains("Tracks = item.Integers(\"tracks\");", talk, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<long>? Tracks { get; init; }\n", talk, StringComparison.Ordinal);
+        Assert.Contains("/// <summary>tracks. Null where the locale has no translation, and empty where it has none.</summary>", talk, StringComparison.Ordinal);
+        // A localized component field is projected as a top-level one is: absent where the locale has none.
+        Assert.Contains("public string? Title { get; init; }", talk, StringComparison.Ordinal);
+        Assert.Empty(generated.Warnings);
+    }
+
+    [Fact]
+    public void A_list_of_an_item_kind_this_generator_does_not_know_is_read_as_JSON_with_a_warning()
+    {
+        var generated = Generator.Generate(ModelOf(new() { ["event"] = [F("flags", "list", item: "boolean")] }), "N");
+
+        Assert.Contains("public JsonElement? Flags { get; init; }", Contents(generated, "Event.cs"), StringComparison.Ordinal);
+        Assert.Contains("a list of 'boolean'", Assert.Single(generated.Warnings), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_link_whose_target_type_is_not_on_the_ref_or_that_has_several_is_an_entry_of_any_type()
     {
         var generated = Generator.Generate(ModelOf(new()
