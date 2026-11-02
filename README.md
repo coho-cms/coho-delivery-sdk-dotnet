@@ -24,7 +24,7 @@ dotnet pack -c Release -o artifacts
 
 `dotnet format --verify-no-changes` is what CI checks. Allman braces, C#'s default: an opening brace goes on its own line.
 
-`spec/` is a copy of [coho-sdk-spec](https://github.com/coho-cms/coho-sdk-spec): recorded delivery responses and type model fixtures, produced by the Coho server. The tests run against it, so these packages agree with the server. Don't edit it by hand.
+`spec/` is a copy of [coho-sdk-spec](https://github.com/coho-cms/coho-sdk-spec): recorded delivery responses, type model fixtures, and webhook signatures, produced by the Coho server. The tests run against it, so these packages agree with the server. Don't edit it by hand.
 
 ## Publishing
 

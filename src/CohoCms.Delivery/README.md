@@ -108,6 +108,40 @@ Each client keeps a private cache of responses, following `Cache-Control` and `E
 
 A refusal throws `CohoDeliveryException`. Branch on its `Code`: `REF_NOT_FOUND`, `KEY_REQUIRED`, `PROJECT_NOT_FOUND`, `INVALID_QUERY` or `RESOLUTION_LIMIT` for the request; `ARTIFACT_UNREADABLE` or `POOL_UNAVAILABLE` for the server; or `UNEXPECTED_RESPONSE` for an answer that isn't a problem document. A preview adds `UNAUTHENTICATED`, for a token that has expired or been revoked, and `ACCOUNT_SUSPENDED`, `ACCOUNT_CLOSED` and `USER_SUSPENDED`. A missing entry is `null`, not an exception.
 
+## Receiving webhooks
+
+Coho signs each webhook request as [Standard Webhooks](https://www.standardwebhooks.com) does. `Webhooks.Verify` checks the signature and the timestamp, and returns the event, typed: its `Id`, `Type`, `CreatedAt`, `Project`, `Actor`, and `Data`, a `JsonElement`. Pass it the body exactly as it arrived, text or bytes, never deserialized and serialized again, since the signature is over what Coho sent.
+
+In an ASP.NET Core minimal API:
+
+```csharp
+app.MapPost("/hooks/coho", async (HttpRequest request, IConfiguration config) =>
+{
+    using var reader = new StreamReader(request.Body);
+    var body = await reader.ReadToEndAsync();
+    WebhookEvent hook;
+    try
+    {
+        hook = Webhooks.Verify(body, request.Headers, config["COHO_WEBHOOK_SECRET"]!);
+    }
+    catch (CohoWebhookException)
+    {
+        return Results.Unauthorized();
+    }
+    if (hook.Type == "environment.promoted")
+    {
+        await site.RebuildAsync();
+    }
+    return Results.NoContent();
+});
+```
+
+- **A refusal throws `CohoWebhookException`**, whose `Reason` is `Signature`, `Timestamp`, or `Headers`. Answer it with a `401`: Coho does not retry one, and an owner can redeliver it once the receiver is fixed.
+- **Header names are matched ignoring case**, so pass `request.Headers` as it is.
+- **While a secret is being rotated**, pass both, `[current, previous]`: a request signed with either is accepted.
+- **A timestamp more than five minutes from the receiver's clock is refused**, so a captured request cannot be replayed. Pass `now` in tests, and `tolerance` to narrow it.
+- **An event can arrive twice, or out of order.** Its `Id` is the same on every attempt: drop one you have already handled.
+
 ## License
 
 Apache-2.0
