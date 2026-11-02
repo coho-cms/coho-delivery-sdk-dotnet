@@ -56,6 +56,12 @@ internal sealed record ContentType
     /// <summary>Since 1.3: no entry is of this type itself, only its descendants.</summary>
     public bool Abstract { get; set; }
 
+    /// <summary>Since 1.7: the type has one entry on a ref, which answers to <c>entrySlug</c>. Never abstract, never a component, and no type extends it.</summary>
+    public bool Singleton { get; set; }
+
+    /// <summary>Since 1.7, on a singleton: the slug its entry answers to, the type's slug in kebab case.</summary>
+    public string? EntrySlug { get; set; }
+
     /// <summary>Since 1.4: every trait the type has, each a key of <c>traits</c>, its ancestors' first. Its fields already include theirs.</summary>
     public List<string> Traits { get; set; } = [];
 

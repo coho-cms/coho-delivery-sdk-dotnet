@@ -17,6 +17,7 @@ internal static class Fixtures
         ["traits"] = "Golden.Traits",
         ["lists"] = "Golden.Lists",
         ["nested"] = "Golden.Nested",
+        ["singletons"] = "Golden.Singletons",
     };
 
     public static string ModelFile(string name) => Path.Combine(AppContext.BaseDirectory, "spec", "type-model", "fixtures", $"{name}.json");
@@ -51,7 +52,8 @@ internal static class Fixtures
         JsonArray? warnings = null,
         Dictionary<string, JsonObject[]>? components = null,
         Dictionary<string, string>? extends = null,
-        string[]? @abstract = null)
+        string[]? @abstract = null,
+        Dictionary<string, string?>? singletons = null)
     {
         JsonObject Types(Dictionary<string, JsonObject[]> types)
         {
@@ -72,13 +74,22 @@ internal static class Fixtures
                 {
                     json["abstract"] = true;
                 }
+                // A singleton with its entry's slug, or none, as a broken model has it.
+                if (singletons is not null && singletons.TryGetValue(type.Key, out var entrySlug))
+                {
+                    json["singleton"] = true;
+                    if (entrySlug is not null)
+                    {
+                        json["entrySlug"] = entrySlug;
+                    }
+                }
                 return KeyValuePair.Create<string, JsonNode?>(type.Key, json);
             }));
         }
 
         var json = new JsonObject
         {
-            ["irVersion"] = extends is not null || @abstract is not null ? "1.3" : components is null ? "1.0" : "1.2",
+            ["irVersion"] = singletons is not null ? "1.7" : extends is not null || @abstract is not null ? "1.3" : components is null ? "1.0" : "1.2",
             ["source"] = new JsonObject { ["project"] = "p1", ["ref"] = @ref, ["immutable"] = immutable, ["schemaHash"] = "sha256:0" },
             ["types"] = Types(types),
         };

@@ -36,7 +36,7 @@ internal static class Generator
     [
         "Coho", "ContentServiceCollectionExtensions", "SortBy", "Source",
         "ClientOptions", "ContentClient", "ContentConfig", "EntryBase", "EntryReader", "ISortOrder", "ItemBase", "ItemReader", "Linked", "LinkKind",
-        "NoSortOrder", "ReadOptions", "RepeaterItem", "TypeReader", "TypeShape",
+        "NoSortOrder", "ReadOptions", "RepeaterItem", "SingletonReader", "TypeReader", "TypeShape",
         "CancellationToken", "DateTimeOffset", "Dictionary", "Func", "IHttpClientBuilder", "IReadOnlyCollection",
         "IReadOnlyDictionary", "IReadOnlyList", "IServiceCollection", "IServiceProvider", "ImmutableDictionary",
         "JsonElement", "SetsRequiredMembers", "SetsRequiredMembersAttribute", "Task",
@@ -441,6 +441,10 @@ internal static class Generator
         {
             notes.Add($"Abstract: {(component ? "an item" : "an entry")} is one of the types that extend it.");
         }
+        if (!component && IsSingleton(type))
+        {
+            notes.Add($"A singleton: its one entry answers to {Literal(type.EntrySlug!)}.");
+        }
         var implemented = Implements(type, parent, names, properties, variable, warnings);
         if (implemented.Count > 0)
         {
@@ -555,6 +559,9 @@ internal static class Generator
     }
 
     private static bool IsChoice(Field field) => field.Kind is "choice" or "multichoice";
+
+    /// <summary>A singleton (type model 1.7) with the slug its entry answers to, read by one getter. Only a content type is one.</summary>
+    private static bool IsSingleton(ContentType type) => type.Singleton && !string.IsNullOrEmpty(type.EntrySlug);
 
     /// <param name="Type">The property's C# type.</param>
     /// <param name="Read">How the constructor reads it from its reader: an <c>EntryReader</c> named <c>entry</c>, or an <c>ItemReader</c> named <c>item</c>.</param>
@@ -723,6 +730,10 @@ internal static class Generator
             {
                 throw new CodegenException($"Two types would both be read as coho.{member}; rename one of them");
             }
+            if (type.Singleton && !IsSingleton(type))
+            {
+                warnings.Add($"Type '{type.Slug}' is a singleton with no entrySlug, so it is read as an ordinary type. Pull the type model again.");
+            }
             var name = names[type.Slug];
             var order = type.Fields.Any(field => field.Sortable) ? $"{name}.SortBy" : "NoSortOrder";
             // Delivery lists a type with its descendants, so a read of one entry keeps any type in its family.
@@ -765,12 +776,21 @@ internal static class Generator
         o.Add(2, "_content = content;");
         foreach (var (type, member, generic, family) in readers)
         {
-            o.Add(2, $"{member} = content.Type<{generic}>({Literal(type.Slug)}{family});");
+            o.Add(2, IsSingleton(type)
+                ? $"{member} = content.Singleton<{names[type.Slug]}>({Literal(type.Slug)}, {Literal(type.EntrySlug!)});"
+                : $"{member} = content.Type<{generic}>({Literal(type.Slug)}{family});");
         }
         o.Add(1, "}");
         foreach (var (type, member, generic, family) in readers)
         {
             o.Add();
+            // A singleton (type model 1.7) has one entry, so one getter in place of a list and a read by slug.
+            if (IsSingleton(type))
+            {
+                o.Add(1, $"/// <summary>{Xml(Clean(type.Name))}. A singleton: <c>GetAsync()</c> reads its one entry, null before it is first written.</summary>");
+                o.Add(1, $"public SingletonReader<{names[type.Slug]}> {member} {{ get; }}");
+                continue;
+            }
             o.Add(1, Summary(type.Name, family == "" ? "" : $"Entries of every type that extends it too: match on their type."));
             o.Add(1, $"public TypeReader<{generic}> {member} {{ get; }}");
         }

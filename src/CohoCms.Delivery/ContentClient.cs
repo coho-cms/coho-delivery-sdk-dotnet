@@ -104,6 +104,33 @@ public sealed class TypeReader<T, TOrder>
 }
 
 /// <summary>
+/// The read of a singleton type (type model 1.7): a type with one entry on a ref, which
+/// answers to a fixed slug. Hydrated as <typeparamref name="T"/>.
+/// </summary>
+public sealed class SingletonReader<T>
+    where T : EntryBase
+{
+    private readonly ContentClient _content;
+    private readonly string _slug;
+    private readonly string _entrySlug;
+
+    internal SingletonReader(ContentClient content, string slug, string entrySlug)
+    {
+        _content = content;
+        _slug = slug;
+        _entrySlug = entrySlug;
+    }
+
+    /// <summary>Its entry, or null before the entry is first written on the ref.</summary>
+    public async Task<T?> GetAsync(ReadOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        // Its entry is read by its slug, as any other is: delivery has no route of its own for it.
+        var entry = await _content.BySlugAsync(_entrySlug, options, cancellationToken).ConfigureAwait(false);
+        return entry is T typed && entry.Type == _slug ? typed : null;
+    }
+}
+
+/// <summary>
 /// Hydrated reads on one ref. What generated code builds its typed client from, so that
 /// the logic lives in this package and reaches every library with an update.
 /// </summary>
@@ -169,6 +196,15 @@ public sealed class ContentClient
         where TOrder : struct, ISortOrder
     {
         return new TypeReader<T, TOrder>(this, slug, family);
+    }
+
+    /// <summary>The read of a singleton type, whose one entry answers to <paramref name="entrySlug"/>.</summary>
+    /// <param name="slug">The type's slug, which the entry found must have.</param>
+    /// <param name="entrySlug">The slug its entry answers to. Generated code passes the type model's <c>entrySlug</c>, so the slug rule lives in one place, the server.</param>
+    public SingletonReader<T> Singleton<T>(string slug, string entrySlug)
+        where T : EntryBase
+    {
+        return new SingletonReader<T>(this, slug, entrySlug);
     }
 
     internal List<EntryBase> Hydrate(EntryGraph graph) => Hydrator.Hydrate(graph, _shape, _issues);

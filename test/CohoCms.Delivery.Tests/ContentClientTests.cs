@@ -61,6 +61,24 @@ public sealed class ContentClientTests
     }
 
     [Fact]
+    public async Task A_singleton_reads_its_one_entry_by_its_fixed_slug_and_is_null_when_that_slug_is_another_types_or_no_ones()
+    {
+        // The recordings have no singleton, so chain-1 stands in for an entry slug.
+        var (client, replay, _) = Content();
+
+        var settings = await client.Singleton<Article>("article", "chain-1").GetAsync(new ReadOptions { Depth = 2 }, None);
+
+        Assert.Equal("Chain 1", settings?.Title);
+        Assert.Contains("/entries-by-slug/chain-1?", replay.Calls[0].Url, StringComparison.Ordinal);
+        // An entry of any type is an EntryBase, so only its type makes this null.
+        Assert.Null(await client.Singleton<EntryBase>("notice", "chain-1").GetAsync(new ReadOptions { Depth = 2 }, None));
+
+        // The recording asked without a locale.
+        var (bare, _, _) = Content(locale: null);
+        Assert.Null(await bare.Singleton<Article>("article", "nope").GetAsync(cancellationToken: None));
+    }
+
+    [Fact]
     public async Task A_read_of_a_base_type_finds_an_entry_of_any_type_in_its_family()
     {
         var (client, _, _) = Content();

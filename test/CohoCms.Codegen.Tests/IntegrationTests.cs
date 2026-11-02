@@ -146,6 +146,29 @@ public sealed class IntegrationTests
         Assert.Contains("an item of 'video'", issue.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_singleton_is_read_by_its_generated_getter_at_its_entrys_slug()
+    {
+        // Compiled against Expected/singletons: a getter is its record or null, with no list or read by slug.
+        const string Settings = """
+            { "roots": ["s1"], "entries": { "s1": { "id": "s1", "slug": "site-settings", "type": "siteSettings", "fields": { "siteName": "Coho" } } }, "unresolved": {} }
+            """;
+        var handler = new Answering(request => Answering.Json(request.RequestUri!.AbsolutePath.EndsWith("/site-settings", StringComparison.Ordinal) ? Settings : """{ "roots": [], "entries": {}, "unresolved": {} }"""));
+        var coho = new Golden.Singletons.Coho(
+            new ContentConfig { Delivery = new MountedConfig { BaseUrl = Spec.Base, Key = Spec.Key }, Ref = "v0.0.1" },
+            Spec.Options(handler));
+
+        Golden.Singletons.SiteSettings? settings = await coho.SiteSettings.GetAsync(new ReadOptions { Depth = 1 }, None);
+        Golden.Singletons.HomePage? home = await coho.HomePage.GetAsync(cancellationToken: None);
+
+        Assert.Equal("Coho", settings?.SiteName);
+        // The home page is not yet written.
+        Assert.Null(home);
+        Assert.Equal(
+            [$"{Spec.Base}/v0.0.1/entries-by-slug/site-settings?depth=1", $"{Spec.Base}/v0.0.1/entries-by-slug/home-page"],
+            handler.Calls.Select(call => call.Url));
+    }
+
     public static TheoryData<string> Answers => new(Spec.All().Where(each => each.Status == 200).Select(each => each.Name).Order(StringComparer.Ordinal));
 
     [Theory]

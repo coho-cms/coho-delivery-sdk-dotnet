@@ -44,6 +44,7 @@ if (post?.Author is { IsResolved: true } author)
 
 - **Entries are records** deriving from `EntryBase`, with the system values `Id`, `Type`, `Slug` and `Locale` beside their fields. An entry of a type nobody declared is a `HydratedEntry`, holding its fields as JSON.
 - **A reference is a `Linked<T>`**: its target, or a stub whose `Unresolved` says why it is not there. `depth` when it is beyond the requested depth, `absent` when it is not on the ref, `cycle` where following it would loop back, and `type` where the target is of a type the field does not link to. `post.Tags.Resolved()` gives the entries of a list of links that are here, leaving out the stubs.
+- **A singleton is read with `GetAsync`.** `content.Singleton<SiteSettings>("siteSettings", "site-settings").GetAsync()` reads a type that has one entry on a ref, by the slug its entry answers to, and is null before that entry is first written. Generated code passes the type model's `entrySlug`.
 - **Problems are reported, not thrown.** An entry missing a field its type always has, which happens to older entries after a field becomes required, or holding a value of the wrong kind, is passed to `ClientOptions.OnIssue`, once per entry and field. The default is a warning on the client's logger.
 
 ## Released and unreleased content

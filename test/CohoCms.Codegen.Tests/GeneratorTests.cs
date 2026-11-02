@@ -393,6 +393,30 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void A_singleton_is_read_by_one_getter_at_the_slug_the_type_model_names()
+    {
+        var generated = Generator.Generate(Model("singletons"), "N");
+        var client = Contents(generated, "Coho.cs");
+
+        Assert.Contains("public SingletonReader<SiteSettings> SiteSettings { get; }", client, StringComparison.Ordinal);
+        Assert.Contains("SiteSettings = content.Singleton<SiteSettings>(\"siteSettings\", \"site-settings\");", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("TypeReader<SiteSettings", client, StringComparison.Ordinal);
+        // It extends page, so a read of page finds it, as any subtype's entry.
+        Assert.Contains("Page = content.Type<Page, NoSortOrder>(\"page\", [\"homePage\", \"page\"]);", client, StringComparison.Ordinal);
+        Assert.Contains("A singleton: its one entry answers to \"site-settings\".", Contents(generated, "SiteSettings.cs"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_singleton_with_no_entrySlug_is_read_as_an_ordinary_type_with_a_warning()
+    {
+        var generated = Generator.Generate(ModelOf(new() { ["siteSettings"] = [] }, singletons: new() { ["siteSettings"] = null }), "N");
+
+        Assert.Contains("public TypeReader<SiteSettings, NoSortOrder> SiteSettings { get; }", Contents(generated, "Coho.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("singleton", Contents(generated, "SiteSettings.cs"), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["Type 'siteSettings' is a singleton with no entrySlug, so it is read as an ordinary type. Pull the type model again."], generated.Warnings);
+    }
+
+    [Fact]
     public void A_type_that_extends_itself_is_refused()
     {
         var refused = Assert.Throws<CodegenException>(() => Generator.Generate(ModelOf(new() { ["a"] = [], ["b"] = [] }, extends: new() { ["a"] = "b", ["b"] = "a" }), "N"));
