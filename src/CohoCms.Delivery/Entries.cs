@@ -27,7 +27,11 @@ public abstract record EntryBase
         Type = entry.Type;
         Slug = entry.Slug;
         Locale = entry.Locale;
+        BodyAssets = entry.Assets(BodyAssetsField) ?? [];
     }
+
+    /// <summary>The key delivery sends an entry's prose assets under (coho-data doc 80 §10).</summary>
+    private const string BodyAssetsField = "_bodyAssets";
 
     public required string Id { get; init; }
 
@@ -38,6 +42,21 @@ public abstract record EntryBase
 
     /// <summary>The locale the entry was projected for. Null when none was requested.</summary>
     public string? Locale { get; init; }
+
+    /// <summary>
+    /// The assets this entry's prose points at, since delivery 2.3.0 (coho-data doc 80 §10).
+    /// </summary>
+    /// <remarks>
+    /// A Markdown or HTML field names an asset by slug, <c>asset:bridge-at-dusk</c>, and Coho
+    /// records what the prose named on every save. Delivered embedded, like any asset field, so
+    /// a page can turn a reference back into a URL without a second request.
+    /// <para>
+    /// A system value rather than a generated field, which is why it is here beside
+    /// <see cref="Slug"/>: no content type declares it, and the type model does not carry it.
+    /// Empty on an entry whose type could hold no prose, and on one whose prose names nothing.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<Asset> BodyAssets { get; init; } = [];
 }
 
 /// <summary>An entry, untyped: its fields as delivery sent them, and its references followed.</summary>

@@ -17,6 +17,13 @@ public sealed record Asset
     /// <summary>The asset's id: what the entry's field links.</summary>
     public string Id { get; init; } = "";
 
+    /// <summary>
+    /// The asset's slug, since delivery 2.3.0: what prose names it by. A Markdown or HTML
+    /// field writes <c>asset:&lt;slug&gt;</c>, and a page resolving one matches it against
+    /// this (coho-data doc 80 ML-1).
+    /// </summary>
+    public string? Slug { get; init; }
+
     public string? Title { get; init; }
 
     /// <summary>Alternative text, for an image.</summary>
@@ -156,6 +163,7 @@ public sealed record Asset
         return new Asset
         {
             Id = Text(value, "id") ?? "",
+            Slug = Text(value, "slug"),
             Title = Text(value, "title"),
             Alt = Text(value, "alt"),
             FocalPoint = value.TryGetProperty("focalPoint", out var focal) && focal.ValueKind == JsonValueKind.Object
