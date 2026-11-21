@@ -25,6 +25,7 @@ public sealed record Figure : EntryBase
         : base(entry)
     {
         Caption = entry.Text("caption");
+        Body = entry.Text("body");
         Image = entry.Asset("image");
         Poster = entry.Asset("poster");
         Gallery = entry.Assets("gallery") ?? [];
@@ -36,6 +37,9 @@ public sealed record Figure : EntryBase
 
     /// <summary>caption</summary>
     public string? Caption { get; init; }
+
+    /// <summary>body. Markdown.</summary>
+    public string? Body { get; init; }
 
     /// <summary>image. Accepts image/*. Null where the asset it linked is gone.</summary>
     public Asset? Image { get; init; }

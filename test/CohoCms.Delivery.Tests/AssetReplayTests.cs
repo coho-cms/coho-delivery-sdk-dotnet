@@ -15,12 +15,15 @@ internal sealed record Figure : EntryBase
         : base(entry)
     {
         Caption = entry.Text("caption");
+        Body = entry.Text("body");
         Image = entry.Asset("image");
         Poster = entry.Asset("poster");
         Gallery = entry.Assets("gallery") ?? [];
     }
 
     public string? Caption { get; init; }
+
+    public string? Body { get; init; }
 
     public Asset? Image { get; init; }
 
@@ -94,5 +97,27 @@ public sealed class AssetReplayTests
             ],
             graph.Warnings);
         Assert.True(JsonNode.DeepEquals(Spec.Body("entry-with-assets"), Spec.Json(graph)));
+    }
+
+    /*
+     * The prose scheme, against what the server sends rather than a body written here.
+     *
+     * `figure-1`'s body names its image as `asset:bridge`, and the recording carries that asset
+     * in `_bodyAssets` — so this checks the resolver, the key it reads, and delivery's embedding
+     * of a slug all at once. A hand-written body could not: it would agree with whatever the
+     * resolver happened to do.
+     */
+    [Fact]
+    public void ARecordedBodyResolvesToTheUrlDeliverySentForTheAssetItNames()
+    {
+        var figure = Hydrated();
+
+        // As delivered: the reference stands, and the asset it names is carried beside it.
+        Assert.Equal("A figure, and the bridge: ![A bridge](asset:bridge)", figure.Body);
+        Assert.Equal(["bridge"], figure.BodyAssets.Select(asset => asset.Slug));
+
+        Assert.Equal(
+            $"A figure, and the bridge: ![A bridge]({figure.Image?.Url})",
+            Prose.Resolve(figure.Body, figure));
     }
 }
