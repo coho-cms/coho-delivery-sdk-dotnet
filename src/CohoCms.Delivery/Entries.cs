@@ -27,11 +27,8 @@ public abstract record EntryBase
         Type = entry.Type;
         Slug = entry.Slug;
         Locale = entry.Locale;
-        BodyAssets = entry.Assets(BodyAssetsField) ?? [];
+        BodyAssets = entry.Assets(Prose.BodyAssetsField) ?? [];
     }
-
-    /// <summary>The key delivery sends an entry's prose assets under (coho-data doc 80 §10).</summary>
-    private const string BodyAssetsField = "_bodyAssets";
 
     public required string Id { get; init; }
 
@@ -54,6 +51,11 @@ public abstract record EntryBase
     /// A system value rather than a generated field, which is why it is here beside
     /// <see cref="Slug"/>: no content type declares it, and the type model does not carry it.
     /// Empty on an entry whose type could hold no prose, and on one whose prose names nothing.
+    /// </para>
+    /// <para>
+    /// <see cref="Prose.Resolve(string?, EntryBase)"/> is what turns a reference in a body into
+    /// one of these assets' URLs. Read its warning first: a resolved body is for rendering, never
+    /// for saving.
     /// </para>
     /// </remarks>
     public IReadOnlyList<Asset> BodyAssets { get; init; } = [];
