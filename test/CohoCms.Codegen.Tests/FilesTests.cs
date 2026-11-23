@@ -115,6 +115,70 @@ public sealed class FilesTests
     }
 
     [Fact]
+    public void Write_leaves_a_file_that_already_holds_its_text_alone()
+    {
+        var output = Path.Combine(Temp(), "Coho");
+        var header = Generator.GeneratedMark + " Do not edit.\n";
+        Assert.Equal(2, Files.Write([new("Coho.cs", header), new("Post.cs", header)], output));
+        var written = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(Path.Combine(output, "Coho.cs"), written);
+        File.SetLastWriteTimeUtc(Path.Combine(output, "Post.cs"), written);
+
+        Assert.Equal(0, Files.Write([new("Coho.cs", header), new("Post.cs", header)], output));
+        Assert.Equal(1, Files.Write([new("Coho.cs", header), new("Post.cs", header + "// changed\n")], output));
+
+        Assert.Equal(written, File.GetLastWriteTimeUtc(Path.Combine(output, "Coho.cs")));
+        Assert.NotEqual(written, File.GetLastWriteTimeUtc(Path.Combine(output, "Post.cs")));
+        Assert.Equal(["Coho.cs", "Post.cs"], Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Runs_at_once_take_turns_with_the_lock_and_let_it_go()
+    {
+        var dir = Temp();
+        var inside = 0;
+        var most = 0;
+        int Work()
+        {
+            var now = Interlocked.Increment(ref inside);
+            InterlockedMax(ref most, now);
+            Thread.Sleep(50);
+            Interlocked.Decrement(ref inside);
+            return now;
+        }
+
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => Files.Locked(dir, Work))));
+
+        Assert.Equal(1, most);
+        Assert.False(File.Exists(Path.Combine(dir, Files.LockFile)));
+    }
+
+    [Fact]
+    public void A_lock_held_too_long_is_refused_with_its_path()
+    {
+        var dir = Temp();
+        using var held = new FileStream(Path.Combine(dir, Files.LockFile), FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+
+        var refused = Assert.Throws<CodegenException>(() => Files.Locked(dir, () => 0, TimeSpan.FromMilliseconds(200)));
+
+        Assert.Contains(Files.LockFile, refused.Message, StringComparison.Ordinal);
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int seen;
+        do
+        {
+            seen = target;
+            if (value <= seen)
+            {
+                return;
+            }
+        }
+        while (Interlocked.CompareExchange(ref target, value, seen) != seen);
+    }
+
+    [Fact]
     public void A_missing_type_model_says_to_pull_it()
     {
         var missing = Assert.Throws<CodegenException>(() => Files.ReadTypeModel(Path.Combine(Temp(), "coho-ir.json")));

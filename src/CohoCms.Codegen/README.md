@@ -21,6 +21,8 @@ dotnet coho-codegen check      # fail if Coho/ differs from what generate would 
 
 Commit `coho-ir.json`, `Coho/` and `.config/dotnet-tools.json`. `generate` removes the files of types no longer on the ref, and leaves anything it did not write. A schema change then shows up as a diff in review, and `check` in CI catches generated code that is out of date. `generate` and `check` never call the server.
 
+`generate` rewrites only the files whose text changes, and says when there was nothing to write, so it is cheap to run from a build. A library made with `dotnet new coho-library` does: its `coho-codegen.targets` runs `generate` as the library builds, whenever `coho-ir.json`, `coho.config.json` or the tool's version has changed, so after a pull, building is all it takes. Two runs at once, such as a build's for each target framework, take turns with a lock file, `.coho-codegen.lock`, beside the config.
+
 `init` takes Coho's URL and a project token, and nothing else: a token belongs to one project, so Coho says which account and project the library is for. It writes them to `coho.config.json`, and the token to `.env`, which only you can read. In a terminal it asks for what you didn't pass, and doesn't show the token as you type it. Nothing is written if Coho refuses the token. The library only reads, so a viewer token is enough:
 
 ```bash

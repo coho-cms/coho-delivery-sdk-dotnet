@@ -92,13 +92,20 @@ internal static class Cli
             {
                 var loaded = Loaded.From(configFile);
                 var generated = Generator.Generate(Files.ReadTypeModel(loaded.TypeModel), loaded.Namespace());
-                Files.Write(generated.Files, loaded.OutDir);
+                var changed = Files.Locked(Path.GetDirectoryName(configFile)!, () => Files.Write(generated.Files, loaded.OutDir));
+
+                // A build runs this whenever the type model changes, so an unchanged folder says so
+                // and nothing more: the warnings were given when its files were written.
+                if (changed == 0)
+                {
+                    await context.Out.WriteLineAsync($"{Shown(loaded.OutDir)} is up to date.").ConfigureAwait(false);
+                    return 0;
+                }
                 foreach (var warning in generated.Warnings)
                 {
                     await context.Error.WriteLineAsync($"warning: {warning}").ConfigureAwait(false);
                 }
-                var count = generated.Files.Count;
-                await context.Out.WriteLineAsync($"Wrote {count} {(count == 1 ? "file" : "files")} to {Shown(loaded.OutDir)}.").ConfigureAwait(false);
+                await context.Out.WriteLineAsync($"Updated {Shown(loaded.OutDir)}: {changed} {(changed == 1 ? "file" : "files")} written or removed.").ConfigureAwait(false);
                 return 0;
             }
             case "check":

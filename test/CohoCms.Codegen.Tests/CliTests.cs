@@ -72,6 +72,12 @@ public sealed class CliTests
         }
         Assert.Equal(0, (await RunAsync(dir, ["check"])).Status);
 
+        // Again, with nothing changed: nothing is written, and the warnings are not repeated.
+        var again = await RunAsync(dir, ["generate"]);
+        Assert.Equal(0, again.Status);
+        Assert.Equal("Coho is up to date.\n", again.Out.ReplaceLineEndings("\n"));
+        Assert.Equal("", again.Error);
+
         File.AppendAllText(Path.Combine(output, "Coho.cs"), "// edited\n");
         var checkedAgain = await RunAsync(dir, ["check"]);
         Assert.Equal(1, checkedAgain.Status);

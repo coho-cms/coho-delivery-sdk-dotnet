@@ -71,12 +71,26 @@ internal static class Files
     /// earlier run generated that this one does not, so a type taken off the ref takes its file
     /// with it. A file without the generated header is never removed.
     /// </summary>
-    public static void Write(IReadOnlyList<GeneratedFile> files, string outDir)
+    /// <remarks>
+    /// A file that already holds what it would be given is left alone, so its date stays as it
+    /// was and a build has nothing to recompile. Each file is written beside its place and moved
+    /// over it, so a compiler reading the folder never sees half a file.
+    /// </remarks>
+    /// <returns>How many files were written or removed: 0 when the folder was up to date.</returns>
+    public static int Write(IReadOnlyList<GeneratedFile> files, string outDir)
     {
         Directory.CreateDirectory(outDir);
+        var changed = 0;
         foreach (var file in files)
         {
-            File.WriteAllText(Path.Combine(outDir, file.Path), file.Contents);
+            var path = Path.Combine(outDir, file.Path);
+            if (File.Exists(path) && File.ReadAllText(path) == file.Contents)
+            {
+                continue;
+            }
+            File.WriteAllText($"{path}.tmp", file.Contents);
+            File.Move($"{path}.tmp", path, overwrite: true);
+            changed++;
         }
         foreach (var path in Directory.GetFiles(outDir))
         {
@@ -88,9 +102,47 @@ internal static class Files
             if (File.ReadAllText(path).StartsWith(Generator.GeneratedMark, StringComparison.Ordinal))
             {
                 File.Delete(path);
+                changed++;
+            }
+        }
+        return changed;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> while holding a lock file in <paramref name="directory"/>, so
+    /// two runs at once take turns. A build of a library that targets two frameworks generates
+    /// once for each, at the same time; the second finds the folder up to date and writes nothing.
+    /// </summary>
+    /// <remarks>The lock file is removed when it is let go, and a run waits for it at most <paramref name="wait"/>.</remarks>
+    public static T Locked<T>(string directory, Func<T> work, TimeSpan? wait = null)
+    {
+        var path = Path.Combine(directory, LockFile);
+        var until = DateTime.UtcNow + (wait ?? TimeSpan.FromMinutes(1));
+        while (true)
+        {
+            FileStream held;
+            try
+            {
+                held = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose);
+            }
+            catch (IOException) when (DateTime.UtcNow < until)
+            {
+                Thread.Sleep(100);
+                continue;
+            }
+            catch (IOException)
+            {
+                throw new CodegenException($"Another coho-codegen has held {path} for too long. If none is running, delete the file.");
+            }
+            using (held)
+            {
+                return work();
             }
         }
     }
+
+    /// <summary>The file a run holds while it writes, beside the config.</summary>
+    public const string LockFile = ".coho-codegen.lock";
 
     /// <summary>
     /// How <paramref name="outDir"/> differs from <paramref name="files"/>: each file missing or
