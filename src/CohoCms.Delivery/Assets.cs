@@ -106,12 +106,8 @@ public sealed record Asset
     /// A URL that downloads the asset rather than opening it: the original, with <c>dl=1</c>
     /// asking the edge to send it as an attachment under its filename. A browser ignores the
     /// <c>download</c> attribute on a link to another origin, which the asset CDN is, so the
-    /// edge has to say it.
+    /// edge has to say it (doc 40 §5.1).
     /// </summary>
-    /// <remarks>
-    /// ⚠️ The edge does not honour <c>dl</c> yet (doc 40 §5.1). Until it does, the file opens
-    /// in the browser as <see cref="Url"/> does; the link needs no change when it starts to.
-    /// </remarks>
     /// <exception cref="InvalidOperationException">The asset has no URL: the deployment serving it has no asset CDN.</exception>
     public string Download()
     {

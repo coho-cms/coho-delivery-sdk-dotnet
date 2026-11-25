@@ -95,7 +95,7 @@ post.Brochure?.Download();                                                      
 
 - **Only raster images resize** (`IsImage`). An SVG, a PDF or any other file has only its original, which `Image` and `Srcset` return whatever the options.
 - **The edge snaps widths up** to `Asset.ImageWidths`, so a `Srcset` built from them lands on cached images.
-- **`Download` asks the edge to send the file as an attachment**, under its own name, where `Url` opens it in the browser. ⚠️ The edge does not do so yet: until it does, the download URL opens the file too, and needs no change when it starts to.
+- **`Download` asks the edge to send the file as an attachment**, under its own name, where `Url` opens it in the browser.
 - **An asset is as public as its URL**, drafts included, and deleting it does not stop the URL working.
 
 For an `<img>` and a download link already built from these, see [`CohoCms.Razor`](https://github.com/coho-cms/coho-razor).
